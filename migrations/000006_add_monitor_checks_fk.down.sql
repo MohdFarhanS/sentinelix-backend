@@ -1,0 +1,1 @@
+ALTER TABLE monitor_checks DROP CONSTRAINT fk_monitor_checks_monitor;

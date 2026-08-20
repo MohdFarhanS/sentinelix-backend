@@ -1,0 +1,41 @@
+# ==== Environment / Secrets ====
+.env
+.env.*
+!.env.example
+
+# ==== Go build artifacts ====
+/bin/
+/tmp/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Nama binary umum kalau di-build tanpa -o (go build ./cmd/api, ./cmd/worker)
+/api
+/worker
+/cmd/api/api
+/cmd/worker/worker
+
+# ==== Go module cache (kalau pernah vendor lokal) ====
+/vendor/
+
+# ==== Coverage ====
+coverage.txt
+coverage.out
+coverage.html
+
+# ==== IDE / Editor ====
+.vscode/
+.idea/
+*.swp
+
+# ==== OS ====
+.DS_Store
+Thumbs.db
+
+# ==== Logs ====
+*.log
