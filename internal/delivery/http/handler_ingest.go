@@ -47,9 +47,7 @@ func (h *IngestHandler) HandleIngestEvent(w http.ResponseWriter, r *http.Request
 
 	switch {
 	case err == nil:
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusAccepted)
-		json.NewEncoder(w).Encode(map[string]bool{"accepted": true})
+		writeJSON(w, http.StatusAccepted, map[string]bool{"accepted": true})
 	case errors.Is(err, usecase.ErrInvalidAPIKey):
 		writeError(w, http.StatusUnauthorized, "INVALID_API_KEY", "Invalid API key")
 	case errors.Is(err, usecase.ErrRateLimited):

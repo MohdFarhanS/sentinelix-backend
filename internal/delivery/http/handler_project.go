@@ -43,7 +43,7 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{
+	writeJSON(w, http.StatusCreated, map[string]string{
 		"id":      out.ID,
 		"name":    out.Name,
 		"slug":    out.Slug,
@@ -66,5 +66,5 @@ func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"data": projects})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"data": projects})
 }

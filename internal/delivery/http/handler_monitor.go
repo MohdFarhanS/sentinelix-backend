@@ -116,7 +116,7 @@ func (h *MonitorHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(toMonitorResponse(monitor))
+	writeJSON(w, http.StatusCreated, toMonitorResponse(monitor))
 }
 
 func (h *MonitorHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -144,7 +144,7 @@ func (h *MonitorHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"data": data})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"data": data})
 }
 
 func (h *MonitorHandler) GetByID(w http.ResponseWriter, r *http.Request) {
@@ -164,7 +164,7 @@ func (h *MonitorHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(toMonitorResponse(monitor))
+	writeJSON(w, http.StatusOK, toMonitorResponse(monitor))
 }
 
 type updateMonitorRequest struct {
@@ -206,7 +206,7 @@ func (h *MonitorHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(toMonitorResponse(monitor))
+	writeJSON(w, http.StatusOK, toMonitorResponse(monitor))
 }
 
 func (h *MonitorHandler) Delete(w http.ResponseWriter, r *http.Request) {
@@ -293,5 +293,5 @@ func (h *MonitorHandler) ListChecks(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"data": data})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"data": data})
 }

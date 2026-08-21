@@ -1,7 +1,6 @@
 package http
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -81,7 +80,7 @@ func (h *IssueHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"data": data,
 		"meta": map[string]int{"page": page, "total": result.Total},
 	})
@@ -123,7 +122,7 @@ func (h *IssueHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(issueDetailResponse{
+	writeJSON(w, http.StatusOK, issueDetailResponse{
 		ID:        issue.ID,
 		Title:     issue.Title,
 		Level:     issue.Level,
@@ -186,5 +185,5 @@ func (h *IssueHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"data": data})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"data": data})
 }

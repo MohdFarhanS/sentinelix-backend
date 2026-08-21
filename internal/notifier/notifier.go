@@ -161,7 +161,7 @@ func (n *MultiNotifier) sendMonitorDownEmail(ctx context.Context, to string, mon
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("resend API returned status %d", resp.StatusCode)
@@ -191,7 +191,7 @@ func (n *MultiNotifier) sendMonitorDownSlack(ctx context.Context, webhookURL str
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("slack webhook returned status %d", resp.StatusCode)

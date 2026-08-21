@@ -31,12 +31,21 @@ type errorResponse struct {
 }
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
 	resp := errorResponse{}
 	resp.Error.Code = code
 	resp.Error.Message = message
-	json.NewEncoder(w).Encode(resp)
+	writeJSON(w, status, resp)
+}
+
+// writeJSON menyatukan pola Content-Type + WriteHeader + Encode yang berulang
+// di semua handler. Error dari Encode() sengaja diabaikan (bukan di-log) —
+// di titik ini response header/status sudah kepakai duluan, kalau Encode
+// gagal (biasanya karena koneksi client sudah putus) tidak ada aksi
+// pemulihan yang bisa diambil.
+func writeJSON(w http.ResponseWriter, status int, payload interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(payload)
 }
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -66,9 +75,9 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{
-		"id":		out.ID,
-		"email":	out.Email,
+	writeJSON(w, http.StatusCreated, map[string]string{
+		"id": 		out.ID,
+		"email": 	out.Email,
 	})
 }
 
@@ -109,9 +118,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"access_token": out.AccessToken,
-		"expires_in": out.ExpiresIn,
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"access_token":		out.AccessToken,
+		"expires_in":		out.ExpiresIn,
 	})
 }
 
