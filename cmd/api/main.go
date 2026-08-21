@@ -42,7 +42,7 @@ func main() {
 		log.Fatalf("invalid REDIS_URL: %v", err)
 	}
 	redisClient := redis.NewClient(redisOpt)
-	defer redisClient.Close()
+	defer func() { _ = redisClient.Close() }()
 
 	if err := redisClient.Ping(ctx).Err(); err != nil {
 		log.Fatalf("failed to ping redis: %v", err)

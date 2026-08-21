@@ -134,7 +134,7 @@ func (uc *MonitorCheckerUsecase) ping(ctx context.Context, targetURL string) (st
 	if err != nil {
 		return 0, int(elapsed.Milliseconds()), false
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	return resp.StatusCode, int(elapsed.Milliseconds()), resp.StatusCode < 400
 }

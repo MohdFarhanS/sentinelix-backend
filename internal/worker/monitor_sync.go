@@ -19,7 +19,7 @@ type monitorSyncPayload struct {
 // ctx dibatalkan atau channel Redis ditutup.
 func RunMonitorSync(ctx context.Context, supervisor *MonitorSupervisor, broadcaster *redisrepo.Broadcaster, logger zerolog.Logger) error {
 	sub := broadcaster.Subscribe(ctx)
-	defer sub.Close()
+	defer func() { _ = sub.Close() }()
 
 	ch := sub.Channel()
 

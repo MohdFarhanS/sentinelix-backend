@@ -47,7 +47,10 @@ func TestCompute_Deterministic(t *testing.T) {
 	msg := "Deterministic test"
 	stack := "at foo.go:1"
 
-	if fingerprint.Compute(msg, stack) != fingerprint.Compute(msg, stack) {
+	fp1 := fingerprint.Compute(msg, stack)
+	fp2 := fingerprint.Compute(msg, stack)
+
+	if fp1 != fp2 {
 		t.Errorf("fingerprint must be deterministic for the same input")
 	}
 }

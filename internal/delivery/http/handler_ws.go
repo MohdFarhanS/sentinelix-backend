@@ -47,8 +47,8 @@ func (h *WSHandler) HandleConnection(frontendURL string) http.HandlerFunc {
 		if err := h.projectUsecase.VerifyOwnership(r.Context(), userID, projectID); err != nil {
 			// NOTE: sebelum Upgrade() dipanggil, response masih bisa
 			// pakai writeError biasa (belum jadi WS connection).
-			switch {
-			case err == usecase.ErrForbidden:
+			switch err {
+			case usecase.ErrForbidden:
 				writeError(w, http.StatusForbidden, "FORBIDDEN", "You don't have access to this project")
 			default:
 				writeError(w, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project not found")

@@ -108,7 +108,7 @@ func (h *AlertRuleHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(toAlertRuleResponse(rule))
+	_ = json.NewEncoder(w).Encode(toAlertRuleResponse(rule))
 }
 
 func (h *AlertRuleHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -143,7 +143,7 @@ func (h *AlertRuleHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"data": data})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"data": data})
 }
 
 type updateAlertRuleRequest struct {
@@ -204,7 +204,7 @@ func (h *AlertRuleHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(toAlertRuleResponse(rule))
+	_ = json.NewEncoder(w).Encode(toAlertRuleResponse(rule))
 }
 
 func (h *AlertRuleHandler) Delete(w http.ResponseWriter, r *http.Request) {

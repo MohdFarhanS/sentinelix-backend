@@ -12,7 +12,7 @@ import (
 // project_id di envelope.
 func RunSubscriber(ctx context.Context, hub *Hub, broadcaster *redisrepo.Broadcaster) {
 	pubsub := broadcaster.Subscribe(ctx)
-	defer pubsub.Close()
+	defer func() { _ = pubsub.Close() }()
 
 	ch := pubsub.Channel()
 	for {
