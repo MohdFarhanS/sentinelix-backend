@@ -24,6 +24,7 @@ func NewMonitorHandler(monitorUsecase *usecase.MonitorUsecase, logger zerolog.Lo
 
 type createMonitorRequest struct {
 	URL              string `json:"url"`
+	Name             string `json:"name"`
 	IntervalSec      int    `json:"interval_sec"`
 	Channel          string `json:"channel"`
 	ChannelTarget    string `json:"channel_target"`
@@ -34,6 +35,7 @@ type monitorResponse struct {
 	ID               string `json:"id"`
 	ProjectID        string `json:"project_id"`
 	URL              string `json:"url"`
+	Name             string `json:"name"`
 	IntervalSec      int    `json:"interval_sec"`
 	Channel          string `json:"channel"`
 	ChannelTarget    string `json:"channel_target"`
@@ -47,6 +49,7 @@ func toMonitorResponse(m *domain.Monitor) monitorResponse {
 		ID:               m.ID,
 		ProjectID:        m.ProjectID,
 		URL:              m.URL,
+		Name:             m.Name,
 		IntervalSec:      m.IntervalSec,
 		Channel:          m.Channel,
 		ChannelTarget:    m.ChannelTarget,
@@ -104,6 +107,7 @@ func (h *MonitorHandler) Create(w http.ResponseWriter, r *http.Request) {
 		UserID:           userID,
 		ProjectID:        projectID,
 		URL:              req.URL,
+		Name:             req.Name,
 		IntervalSec:      req.IntervalSec,
 		Channel:          req.Channel,
 		ChannelTarget:    req.ChannelTarget,
@@ -169,6 +173,7 @@ func (h *MonitorHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 type updateMonitorRequest struct {
 	URL              *string `json:"url"`
+	Name             *string `json:"name"`
 	IntervalSec      *int    `json:"interval_sec"`
 	Channel          *string `json:"channel"`
 	ChannelTarget    *string `json:"channel_target"`
@@ -194,6 +199,7 @@ func (h *MonitorHandler) Update(w http.ResponseWriter, r *http.Request) {
 		UserID:           userID,
 		MonitorID:        monitorID,
 		URL:              req.URL,
+		Name:             req.Name,
 		IntervalSec:      req.IntervalSec,
 		Channel:          req.Channel,
 		ChannelTarget:    req.ChannelTarget,

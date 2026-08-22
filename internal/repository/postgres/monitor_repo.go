@@ -23,26 +23,27 @@ func NewMonitorRepository(db *pgxpool.Pool) *MonitorRepository {
 
 func (r *MonitorRepository) Create(ctx context.Context, m *domain.Monitor) error {
 	query := `
-		INSERT INTO monitors (project_id, url, interval_sec, channel, channel_target, failure_threshold)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO monitors (project_id, url, name, interval_sec, channel, channel_target, failure_threshold)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, status, created_at
 	`
 
 	return r.db.QueryRow(ctx, query,
-		m.ProjectID, m.URL, m.IntervalSec, m.Channel, m.ChannelTarget, m.FailureThreshold,
+		m.ProjectID, m.URL, m.Name, m.IntervalSec, m.Channel, m.ChannelTarget, m.FailureThreshold,
 	).Scan(&m.ID, &m.Status, &m.CreatedAt)
 }
 
 func (r *MonitorRepository) GetByID(ctx context.Context, id string) (*domain.Monitor, error) {
 	query := `
-		SELECT id, project_id, url, interval_sec, channel, channel_target, failure_threshold, status, created_at
+		SELECT id, project_id, url, name, interval_sec, channel, channel_target, failure_threshold, status, created_at
 		FROM monitors
 		WHERE id = $1
 	`
 
 	var m domain.Monitor
+	var name *string
 	err := r.db.QueryRow(ctx, query, id).Scan(
-		&m.ID, &m.ProjectID, &m.URL, &m.IntervalSec, &m.Channel,
+		&m.ID, &m.ProjectID, &m.URL, &name, &m.IntervalSec, &m.Channel,
 		&m.ChannelTarget, &m.FailureThreshold, &m.Status, &m.CreatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -51,14 +52,18 @@ func (r *MonitorRepository) GetByID(ctx context.Context, id string) (*domain.Mon
 	if err != nil {
 		return nil, err
 	}
+	if name != nil {
+		m.Name = *name
+	}
 	return &m, nil
 }
 
 func (r *MonitorRepository) ListByProjectID(ctx context.Context, projectID string) ([]*domain.Monitor, error) {
 	return r.queryMonitors(ctx, `
-		SELECT id, project_id, url, interval_sec, channel, channel_target, failure_threshold, status, created_at
+		SELECT id, project_id, url, name, interval_sec, channel, channel_target, failure_threshold, status, created_at
 		FROM monitors
 		WHERE project_id = $1
+		ORDER BY created_at DESC
 	`, projectID)
 }
 
@@ -67,13 +72,14 @@ func (r *MonitorRepository) ListByProjectID(ctx context.Context, projectID strin
 // AlertRuleRepository.ListActiveThresholdRules di Sprint 6).
 func (r *MonitorRepository) ListAll(ctx context.Context) ([]*domain.Monitor, error) {
 	return r.queryMonitors(ctx, `
-		SELECT id, project_id, url, interval_sec, channel, channel_target, failure_threshold, status, created_at
+		SELECT id, project_id, url, name, interval_sec, channel, channel_target, failure_threshold, status, created_at
 		FROM monitors
 	`)
 }
 
 // queryMonitors helper kecil biar ListByProjectID & ListAll tidak
 // duplikasi loop scan — pola sama seperti queryRules di alert_repo.go.
+// name di-scan lewat *string dulu karena kolomnya nullable di DB.
 func (r *MonitorRepository) queryMonitors(ctx context.Context, query string, args ...any) ([]*domain.Monitor, error) {
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
@@ -84,11 +90,15 @@ func (r *MonitorRepository) queryMonitors(ctx context.Context, query string, arg
 	monitors := []*domain.Monitor{}
 	for rows.Next() {
 		var m domain.Monitor
+		var name *string
 		if err := rows.Scan(
-			&m.ID, &m.ProjectID, &m.URL, &m.IntervalSec, &m.Channel,
+			&m.ID, &m.ProjectID, &m.URL, &name, &m.IntervalSec, &m.Channel,
 			&m.ChannelTarget, &m.FailureThreshold, &m.Status, &m.CreatedAt,
 		); err != nil {
 			return nil, err
+		}
+		if name != nil {
+			m.Name = *name
 		}
 		monitors = append(monitors, &m)
 	}
@@ -103,10 +113,10 @@ func (r *MonitorRepository) queryMonitors(ctx context.Context, query string, arg
 func (r *MonitorRepository) Update(ctx context.Context, m *domain.Monitor) error {
 	query := `
 		UPDATE monitors
-		SET url = $2, interval_sec = $3, channel = $4, channel_target = $5, failure_threshold = $6
+		SET url = $2, name = $3, interval_sec = $4, channel = $5, channel_target = $6, failure_threshold = $7
 		WHERE id = $1
 	`
-	_, err := r.db.Exec(ctx, query, m.ID, m.URL, m.IntervalSec, m.Channel, m.ChannelTarget, m.FailureThreshold)
+	_, err := r.db.Exec(ctx, query, m.ID, m.URL, m.Name, m.IntervalSec, m.Channel, m.ChannelTarget, m.FailureThreshold)
 	return err
 }
 

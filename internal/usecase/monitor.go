@@ -48,6 +48,7 @@ type CreateMonitorInput struct {
 	UserID           string
 	ProjectID        string
 	URL              string
+	Name             string // opsional — kosong = fallback ke URL saat ditampilkan (domain.Monitor.DisplayName())
 	IntervalSec      int
 	Channel          string
 	ChannelTarget    string
@@ -70,6 +71,7 @@ func (uc *MonitorUsecase) Create(ctx context.Context, in CreateMonitorInput) (*d
 	monitor := &domain.Monitor{
 		ProjectID:        in.ProjectID,
 		URL:              in.URL,
+		Name:             in.Name,
 		IntervalSec:      in.IntervalSec,
 		Channel:          in.Channel,
 		ChannelTarget:    in.ChannelTarget,
@@ -138,6 +140,7 @@ type UpdateMonitorInput struct {
 	UserID           string
 	MonitorID        string
 	URL              *string
+	Name             *string
 	IntervalSec      *int
 	Channel          *string
 	ChannelTarget    *string
@@ -152,6 +155,9 @@ func (uc *MonitorUsecase) Update(ctx context.Context, in UpdateMonitorInput) (*d
 
 	if in.URL != nil {
 		monitor.URL = *in.URL
+	}
+	if in.Name != nil {
+		monitor.Name = *in.Name
 	}
 	if in.IntervalSec != nil {
 		monitor.IntervalSec = *in.IntervalSec

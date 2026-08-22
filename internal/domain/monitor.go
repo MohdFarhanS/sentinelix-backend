@@ -36,12 +36,23 @@ type Monitor struct {
 	ID					string
 	ProjectID			string
 	URL					string
+	Name				string // opsional — label tampilan buat status page publik (Sprint 8). Kosong = fallback ke URL, lihat DisplayName().
 	IntervalSec			int
 	Channel				string
 	ChannelTarget		string
 	FailureThreshold	int
 	Status				string
 	CreatedAt			time.Time
+}
+
+// DisplayName mengembalikan Name kalau diisi, atau URL sebagai fallback.
+// Dipakai status page publik supaya monitor lama (dibuat sebelum kolom
+// name ada) tetap punya label yang masuk akal tanpa perlu backfill data.
+func (m *Monitor) DisplayName() string {
+	if m.Name != "" {
+		return m.Name
+	}
+	return m.URL
 }
 
 var (
@@ -57,7 +68,7 @@ var (
 // Validate menjaga integritas data sebelum masuk repository. Dipanggil
 // SETELAH usecase mengisi default (FailureThreshold, IntervalSec) — lihat
 // MonitorUsecase.Create di monitor.go, pola sama seperti
-// AlertRule.Validate().
+// AlertRule.Validate(). Name TIDAK divalidasi required — opsional by design.
 func (m *Monitor) Validate() error {
 	if m.URL == "" {
 		return ErrMonitorURLRequired
@@ -117,7 +128,7 @@ type MonitorRepository interface {
 	ListAll(ctx context.Context) ([]*Monitor, error)
 
 	// Update meng-update SEMUA field yang bisa diubah lewat PATCH
-	// (URL, IntervalSec, Channel, ChannelTarget, FailureThreshold).
+	// (URL, Name, IntervalSec, Channel, ChannelTarget, FailureThreshold).
 	// Usecase yang tanggung jawab merge partial request ke *Monitor
 	// existing sebelum manggil ini (pola sama seperti IssueUsecase).
 	Update(ctx context.Context, m *Monitor) error

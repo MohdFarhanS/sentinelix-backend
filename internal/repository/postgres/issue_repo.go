@@ -105,7 +105,7 @@ func (r *IssueRepository) GetByID(ctx context.Context, id string) (*domain.Issue
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrIssueNotFound
 		}
-		return nil, domain.ErrPasswordNeedsDigit
+		return nil, err
 	}
 	return &issue, nil
 }
