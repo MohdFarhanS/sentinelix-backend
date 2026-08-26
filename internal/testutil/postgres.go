@@ -78,7 +78,7 @@ func runMigrations(t *testing.T, connStr string) {
 	if err != nil {
 		t.Fatalf("failed to init migrate: %v", err)
 	}
-	defer m.Close()
+	defer func() { _, _ = m.Close() }()
 
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		t.Fatalf("failed to run migrations: %v", err)
