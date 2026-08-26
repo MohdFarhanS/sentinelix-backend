@@ -11,9 +11,9 @@ import (
 // AlertNotifierWorker periodic ticker KHUSUS condition_type="threshold".
 // new_issue TIDAK lewat sini — itu event-driven di ingest_consumer.go.
 type AlertNotifierWorker struct {
-	evaluateAlert	*usecase.EvaluateAlertUsecase
-	logger			zerolog.Logger
-	interval		time.Duration
+	evaluateAlert *usecase.EvaluateAlertUsecase
+	logger        zerolog.Logger
+	interval      time.Duration
 }
 
 func NewAlertNotifierWorker(evaluateAlert *usecase.EvaluateAlertUsecase, logger zerolog.Logger, interval time.Duration) *AlertNotifierWorker {

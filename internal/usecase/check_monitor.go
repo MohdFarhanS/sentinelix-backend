@@ -23,11 +23,11 @@ const checkerUserAgent = "SentinelIX-Uptime-Monitor/1.0"
 const monitorStatusChangedEvent = "monitor.status_changed"
 
 type MonitorCheckerUsecase struct {
-	monitorRepo 		domain.MonitorRepository
-	monitorCheckRepo 	domain.MonitorCheckRepository
-	notifier 			MonitorNotifier
-	broadcaster			MonitorSyncPublisher
-	httpClient			*http.Client
+	monitorRepo      domain.MonitorRepository
+	monitorCheckRepo domain.MonitorCheckRepository
+	notifier         MonitorNotifier
+	broadcaster      MonitorSyncPublisher
+	httpClient       *http.Client
 }
 
 func NewMonitorCheckerUsecase(
@@ -37,11 +37,11 @@ func NewMonitorCheckerUsecase(
 	broadcaster MonitorSyncPublisher,
 ) *MonitorCheckerUsecase {
 	return &MonitorCheckerUsecase{
-		monitorRepo:		monitorRepo,
-		monitorCheckRepo: 	monitorCheckRepo,
-		notifier: 			notifier,
-		broadcaster: 		broadcaster,
-		httpClient: 		&http.Client{
+		monitorRepo:      monitorRepo,
+		monitorCheckRepo: monitorCheckRepo,
+		notifier:         notifier,
+		broadcaster:      broadcaster,
+		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
 	}
@@ -55,10 +55,10 @@ func (uc *MonitorCheckerUsecase) Check(ctx context.Context, monitor *domain.Moni
 	statusCode, latencyMs, isUp := uc.ping(ctx, monitor.URL)
 
 	check := &domain.MonitorCheck{
-		MonitorID: 		monitor.ID,
-		StatusCode: 	statusCode,
-		LatencyMs:		latencyMs,
-		IsUp: 			isUp,
+		MonitorID:  monitor.ID,
+		StatusCode: statusCode,
+		LatencyMs:  latencyMs,
+		IsUp:       isUp,
 	}
 	if err := uc.monitorCheckRepo.Create(ctx, check); err != nil {
 		return nil, err
@@ -76,8 +76,8 @@ func (uc *MonitorCheckerUsecase) Check(ctx context.Context, monitor *domain.Moni
 		monitor.Status = newStatus
 
 		_ = uc.broadcaster.Publish(ctx, monitor.ProjectID, monitorStatusChangedEvent, map[string]interface{}{
-			"monitor_id": 	monitor.ID,
-			"is_up":		newStatus == domain.MonitorStatusUp,
+			"monitor_id": monitor.ID,
+			"is_up":      newStatus == domain.MonitorStatusUp,
 		})
 
 		if newStatus == domain.MonitorStatusDown {

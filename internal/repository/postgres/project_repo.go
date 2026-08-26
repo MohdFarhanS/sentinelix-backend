@@ -14,7 +14,7 @@ type ProjectRepository struct {
 	db *pgxpool.Pool
 }
 
-func NewProjectRepository(db *pgxpool.Pool) * ProjectRepository {
+func NewProjectRepository(db *pgxpool.Pool) *ProjectRepository {
 	return &ProjectRepository{db: db}
 }
 
@@ -89,4 +89,10 @@ func (r *ProjectRepository) ListByUserID(ctx context.Context, userID string) ([]
 		projects = append(projects, &p)
 	}
 	return projects, rows.Err()
+}
+
+func (r *ProjectRepository) Delete(ctx context.Context, id string) error {
+	query := `DELETE FROM projects WHERE id = $1`
+	_, err := r.db.Exec(ctx, query, id)
+	return err
 }

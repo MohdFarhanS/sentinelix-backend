@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/MohdFarhanS/sentinelix-backend/internal/domain"
 	redisrepo "github.com/MohdFarhanS/sentinelix-backend/internal/repository/redis"
 	"github.com/rs/zerolog"
-	"github.com/MohdFarhanS/sentinelix-backend/internal/domain"
 )
 
 // monitorSyncPayload — Data di BroadcastMessage buat event monitor.*

@@ -9,33 +9,33 @@ import (
 // Issue merepresentasikan satu grup error yang sudah di-fingerprint.
 // Sinkron dengan tabel `issues` di 03-DATABASE-DESIGN.md.
 type Issue struct {
-	ID			string
-	ProjectID	string
-	Fingerprint	string
-	Title		string
-	Level		string
-	Status		string
-	FirstSeen	time.Time
-	LastSeen	time.Time
-	Count		int
+	ID          string
+	ProjectID   string
+	Fingerprint string
+	Title       string
+	Level       string
+	Status      string
+	FirstSeen   time.Time
+	LastSeen    time.Time
+	Count       int
 }
 
 type IssueFilter struct {
-	ProjectID	string
-	Status		string
-	Page		int
-	Limit		int
+	ProjectID string
+	Status    string
+	Page      int
+	Limit     int
 }
 
 type IssueListResult struct {
-	Issues	[]*Issue
-	Total	int
+	Issues []*Issue
+	Total  int
 }
 
 const (
-	IssueStatusUnresolved 	= "unresolved"
-	IssueStatusResolved 	= "resolved"
-	IssueStatusIgnored 		= "ignored"
+	IssueStatusUnresolved = "unresolved"
+	IssueStatusResolved   = "resolved"
+	IssueStatusIgnored    = "ignored"
 )
 
 var ErrIssueNotFound = errors.New("issue not found")

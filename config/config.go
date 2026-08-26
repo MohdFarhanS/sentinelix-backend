@@ -7,28 +7,28 @@ import (
 )
 
 type Config struct {
-	DatabaseURL			string
-	RedisURL			string
-	JWTSecret			string
-	Port				string
-	Env					string // "development" | "production" — dipakai buat flag Secure di cookie
-	FrontendURL			string // dipakai buat CORS whitelist (06-ROADMAP.md §6 Security Checklist)
-	ResendAPIKey		string
-	EmailFromAddress	string
+	DatabaseURL      string
+	RedisURL         string
+	JWTSecret        string
+	Port             string
+	Env              string // "development" | "production" — dipakai buat flag Secure di cookie
+	FrontendURL      string // dipakai buat CORS whitelist (06-ROADMAP.md §6 Security Checklist)
+	ResendAPIKey     string
+	EmailFromAddress string
 }
 
 func Load() (*Config, error) {
 	_ = godotenv.Load()
 
 	cfg := &Config{
-		DatabaseURL: 		os.Getenv("DATABASE_URL"),
-		RedisURL: 			os.Getenv("REDIS_URL"),
-		JWTSecret: 			os.Getenv("JWT_SECRET"),
-		Port: 				os.Getenv("PORT"),
-		Env:				getEnvDefault("APP_ENV", "development"),
-		FrontendURL:		getEnvDefault("FRONTEND_URL", "http://localhost:3000"),
-		ResendAPIKey: 		os.Getenv("RESEND_API_KEY"),
-		EmailFromAddress: 	getEnvDefault("EMAIL_FROM_ADDRESS", "onboarding@resend.dev"),
+		DatabaseURL:      os.Getenv("DATABASE_URL"),
+		RedisURL:         os.Getenv("REDIS_URL"),
+		JWTSecret:        os.Getenv("JWT_SECRET"),
+		Port:             os.Getenv("PORT"),
+		Env:              getEnvDefault("APP_ENV", "development"),
+		FrontendURL:      getEnvDefault("FRONTEND_URL", "http://localhost:3000"),
+		ResendAPIKey:     os.Getenv("RESEND_API_KEY"),
+		EmailFromAddress: getEnvDefault("EMAIL_FROM_ADDRESS", "onboarding@resend.dev"),
 	}
 
 	if cfg.DatabaseURL == "" {

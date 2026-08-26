@@ -7,16 +7,16 @@ import (
 )
 
 var (
-	ErrUserNotFound 		= errors.New("user not found")
-	ErrEmailAlreadyExist 	= errors.New("email already resitered")
-	ErrInvalidCredential 	= errors.New("invalid email or password")
+	ErrUserNotFound      = errors.New("user not found")
+	ErrEmailAlreadyExist = errors.New("email already resitered")
+	ErrInvalidCredential = errors.New("invalid email or password")
 )
 
 type User struct {
-	ID				string
-	Email			string
-	PasswordHash	string
-	CreatedAt		time.Time
+	ID           string
+	Email        string
+	PasswordHash string
+	CreatedAt    time.Time
 }
 
 // UserRepository didefinikan di domain, diimplementasikan di repository/postgres.

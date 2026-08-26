@@ -10,12 +10,12 @@ import (
 // Monitor status values. "unknown" dipakai sebelum check pertama jalan,
 // diupdate jadi "up"/"down" oleh MonitorCheckerUsecase setiap selesai ping.
 const (
-	MonitorStatusUnknown 	= "unknown"
-	MonitorStatusUp			= "up"
-	MonitorStatusDown		= "down"
-	MonitorSyncCreated = "monitor.created"
-	MonitorSyncUpdated = "monitor.updated"
-	MonitorSyncDeleted = "monitor.deleted"
+	MonitorStatusUnknown = "unknown"
+	MonitorStatusUp      = "up"
+	MonitorStatusDown    = "down"
+	MonitorSyncCreated   = "monitor.created"
+	MonitorSyncUpdated   = "monitor.updated"
+	MonitorSyncDeleted   = "monitor.deleted"
 
 	// DefaultFailureThreshold dipakai kalau request tidak mengisi
 	// failure_threshold — sesuai FR-19.
@@ -33,16 +33,16 @@ const (
 // check_monitor.go).
 
 type Monitor struct {
-	ID					string
-	ProjectID			string
-	URL					string
-	Name				string // opsional — label tampilan buat status page publik (Sprint 8). Kosong = fallback ke URL, lihat DisplayName().
-	IntervalSec			int
-	Channel				string
-	ChannelTarget		string
-	FailureThreshold	int
-	Status				string
-	CreatedAt			time.Time
+	ID               string
+	ProjectID        string
+	URL              string
+	Name             string // opsional — label tampilan buat status page publik (Sprint 8). Kosong = fallback ke URL, lihat DisplayName().
+	IntervalSec      int
+	Channel          string
+	ChannelTarget    string
+	FailureThreshold int
+	Status           string
+	CreatedAt        time.Time
 }
 
 // DisplayName mengembalikan Name kalau diisi, atau URL sebagai fallback.
@@ -56,13 +56,13 @@ func (m *Monitor) DisplayName() string {
 }
 
 var (
-	ErrMonitorNotFound					= errors.New("monitor not found")
-	ErrMonitorURLRequired				= errors.New("url is required")
-	ErrMonitorURLInvalid 				= errors.New("url must be a valid absolute http/https URL")
-	ErrMonitorIntervalInvalid			= errors.New("interval_sec must be >= 60")
-	ErrMonitorChannelInvalid			= errors.New("channel must be 'email' or 'slack'")
-	ErrMonitorChannelTargetRequired		= errors.New("channel_target is required")
-	ErrMonitorFailureThresholdInvalid	= errors.New("failure_threshold must be > 0")
+	ErrMonitorNotFound                = errors.New("monitor not found")
+	ErrMonitorURLRequired             = errors.New("url is required")
+	ErrMonitorURLInvalid              = errors.New("url must be a valid absolute http/https URL")
+	ErrMonitorIntervalInvalid         = errors.New("interval_sec must be >= 60")
+	ErrMonitorChannelInvalid          = errors.New("channel must be 'email' or 'slack'")
+	ErrMonitorChannelTargetRequired   = errors.New("channel_target is required")
+	ErrMonitorFailureThresholdInvalid = errors.New("failure_threshold must be > 0")
 )
 
 // Validate menjaga integritas data sebelum masuk repository. Dipanggil
@@ -106,12 +106,12 @@ func validateMonitorURL(raw string) error {
 // monitor_checks (lihat 03-DATABASE-DESIGN.md) — sama seperti events,
 // bakal di-drop per partisi setelah 30 hari (retention policy).
 type MonitorCheck struct {
-	ID			string
-	MonitorID	string
-	StatusCode	int
-	LatencyMs	int
-	IsUp		bool
-	CheckedAt	time.Time
+	ID         string
+	MonitorID  string
+	StatusCode int
+	LatencyMs  int
+	IsUp       bool
+	CheckedAt  time.Time
 }
 
 // MonitorRepository didefinisikan di domain, diimplementasikan di
@@ -141,7 +141,6 @@ type MonitorRepository interface {
 
 	Delete(ctx context.Context, id string) error
 }
-
 
 // MonitorCheckRepository didefinisikan di domain, diimplementasikan di
 // internal/repository/postgres.

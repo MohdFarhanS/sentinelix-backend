@@ -14,6 +14,11 @@ const userIDContextKey contextKey = "user_id"
 // AccessTokenCookieName harus sama dengan yang di-set di handler_auth.go Login.
 const AccessTokenCookieName = "access_token"
 
+// RefreshTokenCookieName — cookie terpisah dari access token, Path
+// di-scope ke /api/v1/auth saja (lihat handler_auth.go), TIDAK ikut
+// nempel di setiap request dashboard.
+const RefreshTokenCookieName = "refresh_token"
+
 // AuthMiddleware baca JWT dari httpOnly cookie (bukan header Authorization,
 // sesuai keputusan: token disimpan di httpOnly cookie di sisi client).
 func AuthMiddleware(jwtManager *jwt.Manager) func(http.Handler) http.Handler {

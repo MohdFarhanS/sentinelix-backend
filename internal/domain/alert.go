@@ -9,7 +9,7 @@ import (
 // Kondisi & channel yang valid, dipakai di Validate() dan di usecase
 // evaluate_alert.go biar tidak ada string literal tersebar.
 const (
-	ConditionTypeNewIssue = "new_issue"
+	ConditionTypeNewIssue  = "new_issue"
 	ConditionTypeThreshold = "threshold"
 
 	ChannelEmail = "email"
@@ -24,25 +24,25 @@ const (
 //     hitung count event per issue dalam rentang waktu tsb (windowed,
 //     BUKAN issues.count yang kumulatif).
 type AlertRule struct {
-	ID				string
-	ProjectID		string
-	ConditionType	string
-	Threshold		int
-	WindowMinutes	int
-	CooldownMinutes	int
-	Channel			string
-	ChannelTarget	string
-	CreatedAt		time.Time
+	ID              string
+	ProjectID       string
+	ConditionType   string
+	Threshold       int
+	WindowMinutes   int
+	CooldownMinutes int
+	Channel         string
+	ChannelTarget   string
+	CreatedAt       time.Time
 }
 
 var (
-	ErrAlertRuleNotFound 			= errors.New("alert rule not found")
-	ErrAlertConditionTypeInvalid 	= errors.New("conditon_type must be 'new_issue' or 'threshold'")
-	ErrAlertChannelInvalid 			= errors.New("channel must be 'email' or 'slack'")
-	ErrAlertThresholdInvalid 		= errors.New("threshold must be > 0 for condition_type 'threshold'")
-	ErrAlertWindowMinutesInvalid 	= errors.New("window_minutes must be > 0")
-	ErrAlertCooldownMinutesInvalid 	= errors.New("cooldown_minutes must be > 0")
-	ErrAlertChannelTargetRequired 	= errors.New("channel_target is required")
+	ErrAlertRuleNotFound           = errors.New("alert rule not found")
+	ErrAlertConditionTypeInvalid   = errors.New("conditon_type must be 'new_issue' or 'threshold'")
+	ErrAlertChannelInvalid         = errors.New("channel must be 'email' or 'slack'")
+	ErrAlertThresholdInvalid       = errors.New("threshold must be > 0 for condition_type 'threshold'")
+	ErrAlertWindowMinutesInvalid   = errors.New("window_minutes must be > 0")
+	ErrAlertCooldownMinutesInvalid = errors.New("cooldown_minutes must be > 0")
+	ErrAlertChannelTargetRequired  = errors.New("channel_target is required")
 )
 
 // Validate menjaga integritas data sebelum masuk ke repository. Threshold
@@ -73,10 +73,10 @@ func (r *AlertRule) Validate() error {
 // Granularitas per (AlertRuleID, IssueID): issue lain yang exceed
 // threshold pada rule yang sama TIDAK ikut ke-cooldown oleh issue lain.
 type AlertLog struct {
-	ID			string
-	AlertRuleID	string
-	IssueID		string
-	SentAt		time.Time
+	ID          string
+	AlertRuleID string
+	IssueID     string
+	SentAt      time.Time
 }
 
 // AlertRuleRepository didefinisikan di domain, diimplementasikan di

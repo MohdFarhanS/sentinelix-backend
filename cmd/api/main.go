@@ -50,17 +50,29 @@ func main() {
 
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 
-	// Wiring auth (Sprint 1)
+	// Rate limiters (Sprint 2 + Sprint 9) — tiga instance dari struct yang
+	// sama (redisrepo.RateLimiter), beda konfigurasi (prefix/limit/window)
+	// di-bind saat construction, bukan lewat interface/method berbeda.
+	ingestRateLimiter := redisrepo.NewRateLimiter(redisClient, "ratelimit:ingest", 100, time.Minute)
+	loginIPLimiter := redisrepo.NewRateLimiter(redisClient, "ratelimit:login:ip", 10, 15*time.Minute)
+	loginEmailLimiter := redisrepo.NewRateLimiter(redisClient, "ratelimit:login:email", 5, 15*time.Minute)
+	dashboardRateLimiter := redisrepo.NewRateLimiter(redisClient, "ratelimit:dashboard", 300, time.Minute)
+
+	// Wiring audit log (Sprint 9) — dibuat di awal, dipakai projectUsecase
+	// & alertRuleUsecase di bawah (satu repository, dua consumer).
+	auditLogRepo := postgres.NewAuditLogRepository(dbPool)
+
+	// Wiring auth (Sprint 1, rate limiter ditambahkan Sprint 9)
 	userRepo := postgres.NewUserRepository(dbPool)
-	jwtManager := jwt.NewManager(cfg.JWTSecret, time.Hour)
-	authUsecase := usecase.NewAuthUsecase(userRepo, jwtManager)
+	refreshTokenRepo := postgres.NewRefreshTokenRepository(dbPool)
+	jwtManager := jwt.NewManager(cfg.JWTSecret, 15*time.Minute)
+	authUsecase := usecase.NewAuthUsecase(userRepo, refreshTokenRepo, jwtManager, loginIPLimiter, loginEmailLimiter)
 	authHandler := deliveryhttp.NewAuthHandler(authUsecase, cfg.Env == "production")
 
 	// Wiring ingest (Sprint 2) — projectRepo di-reuse di bawah buat project & issue usecase
 	projectRepo := postgres.NewProjectRepository(dbPool)
-	rateLimiter := redisrepo.NewRateLimiter(redisClient)
 	eventQueue := redisrepo.NewEventQueue(redisClient)
-	ingestUsecase := usecase.NewIngestEventUsecase(projectRepo, rateLimiter, eventQueue)
+	ingestUsecase := usecase.NewIngestEventUsecase(projectRepo, ingestRateLimiter, eventQueue)
 	ingestHandler := deliveryhttp.NewIngestHandler(ingestUsecase)
 
 	// Wiring WebSocket hub (Sprint 5) — broadcaster di-reuse lagi di
@@ -73,7 +85,7 @@ func main() {
 	// Wiring project & issue (prasyarat Sprint 4)
 	issueRepo := postgres.NewIssueRepository(dbPool)
 	eventRepo := postgres.NewEventRepository(dbPool)
-	projectUsecase := usecase.NewProjectUsecase(projectRepo)
+	projectUsecase := usecase.NewProjectUsecase(projectRepo, auditLogRepo, logger)
 	issueUsecase := usecase.NewIssueUsecase(issueRepo, projectRepo, eventRepo)
 	wsHandler := deliveryhttp.NewWSHandler(hub, projectUsecase, logger)
 	projectHandler := deliveryhttp.NewProjectHandler(projectUsecase)
@@ -84,7 +96,7 @@ func main() {
 	// sama sekali — itu murni concern-nya cmd/worker/main.go, API server
 	// tidak pernah mengevaluasi atau mengirim alert secara langsung.
 	alertRuleRepo := postgres.NewAlertRuleRepository(dbPool)
-	alertRuleUsecase := usecase.NewAlertRuleUsecase(alertRuleRepo, projectRepo)
+	alertRuleUsecase := usecase.NewAlertRuleUsecase(alertRuleRepo, projectRepo, auditLogRepo, logger)
 	alertRuleHandler := deliveryhttp.NewAlertRuleHandler(alertRuleUsecase)
 
 	// Wiring monitor (Sprint 7) — sama prinsipnya seperti alert rule:
@@ -97,7 +109,6 @@ func main() {
 	monitorUsecase := usecase.NewMonitorUsecase(monitorRepo, monitorCheckRepo, projectRepo, broadcaster)
 	monitorHandler := deliveryhttp.NewMonitorHandler(monitorUsecase, logger)
 
-	// CHANGED: router sekarang butuh monitorHandler juga
 	router := deliveryhttp.NewRouter(
 		authHandler,
 		ingestHandler,
@@ -107,6 +118,7 @@ func main() {
 		monitorHandler,
 		wsHandler,
 		jwtManager,
+		dashboardRateLimiter,
 		cfg.FrontendURL,
 	)
 

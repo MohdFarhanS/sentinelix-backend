@@ -15,7 +15,7 @@ type GroupIssueUsecase struct {
 	eventRepo domain.EventRepository
 }
 
-func NewGroupIssueUsecase(issueRepo domain.IssueRepository, eventRepo domain.EventRepository) * GroupIssueUsecase {
+func NewGroupIssueUsecase(issueRepo domain.IssueRepository, eventRepo domain.EventRepository) *GroupIssueUsecase {
 	return &GroupIssueUsecase{issueRepo: issueRepo, eventRepo: eventRepo}
 }
 

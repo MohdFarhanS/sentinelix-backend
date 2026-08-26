@@ -21,6 +21,8 @@ repository → delivery). See [`sentinelix-frontend`](#) for the Next.js dashboa
 - **Public status page** — a fully isolated, read-only service (`cmd/status-api`) serves
   aggregate uptime status per project, with no dependency on the dashboard's auth, WebSocket, or
   business logic — see [Isolated Status API](#isolated-status-api-cmdstatus-api) below.
+- **Security hardening** — sliding-window rate limiting, rotating refresh tokens with theft
+  detection, audit logging, and strict payload validation — see [Security](#security) below.
 
 ## Tech Stack
 
@@ -29,11 +31,13 @@ repository → delivery). See [`sentinelix-frontend`](#) for the Next.js dashboa
 | Language | Go 1.22+ |
 | HTTP router | [chi](https://github.com/go-chi/chi) |
 | Database | PostgreSQL ([pgx/v5](https://github.com/jackc/pgx), pooled via `pgxpool`) |
-| Cache / Queue | Redis ([go-redis/v9](https://github.com/redis/go-redis)) — Streams for ingestion, Pub/Sub for realtime sync |
+| Cache / Queue | Redis ([go-redis/v9](https://github.com/redis/go-redis)) — Streams for ingestion, Pub/Sub for realtime sync, sliding-window rate limiting |
+| Auth | Custom JWT (15-min access token) + opaque refresh token (30-day, hashed, rotated on every use) |
 | Realtime | Native WebSocket ([gorilla/websocket](https://github.com/gorilla/websocket)) |
 | Logging | [zerolog](https://github.com/rs/zerolog) (structured, with request-id) |
 | Migrations | [golang-migrate](https://github.com/golang-migrate/migrate) |
-| Testing | Go `testing` + [testify/mock](https://github.com/stretchr/testify) |
+| Testing | Go `testing` + [testify/mock](https://github.com/stretchr/testify) (unit) + [testcontainers-go](https://golang.testcontainers.org/) (repository) |
+| Load testing | [k6](https://k6.io/) |
 
 ## Architecture
 
@@ -48,6 +52,7 @@ domain (entities, repository interfaces)
       ↑
 repository (Postgres / Redis implementations)
 ```
+
 
 Three separate binaries share the same domain/usecase/repository layers:
 
@@ -91,13 +96,36 @@ with `pgxpool.MinConns = 0` and a short `MaxConnIdleTime` so its own connection 
 Neon awake — its compute usage tracks real visitor traffic, not the mere fact that the service is
 deployed.
 
+## Security
+
+Hardened in a dedicated sprint (full checklist in `06-ROADMAP.md` §6):
+
+- **Rate limiting** — a sliding window counter (not fixed window, which allows up to 2x the
+  configured limit to slip through at a window boundary), implemented once
+  (`internal/repository/redis/ratelimiter.go`) and reused with different configuration for every
+  use case: 100/min per API key for event ingestion, 10/15min per IP + 5/15min per email for
+  login, and a generic 300/min per user across all other authenticated dashboard endpoints.
+- **Refresh tokens** — access tokens are short-lived (15-min JWT); a separate opaque refresh
+  token (30-day, SHA-256 hashed at rest, never a JWT) enables silent re-authentication. Refresh
+  tokens rotate on every use, and reuse of an already-rotated token is treated as a theft signal
+  — it revokes every active session for that user, not just the reused token.
+- **Audit logging** — alert rule changes and project/API-key creation are recorded to a generic,
+  polymorphic `audit_logs` table. Writes are best-effort: a logging failure is captured with
+  structured fields (`action`, `resource_id`, `actor_user_id`, the underlying error) but never
+  blocks the operation it's auditing.
+- **Payload validation** — ingestion request bodies are capped at 256KB
+  (`http.MaxBytesReader`), with additional field-level limits on message/stack-trace length and
+  JSON context size.
+
 ## Getting Started
 
 ### Prerequisites
 
 - Go 1.22+
-- Docker & Docker Compose (for local Postgres + Redis)
+- Docker & Docker Compose (for local Postgres + Redis, **and** for repository-level tests via
+  testcontainers — see [Running Tests](#running-tests))
 - [golang-migrate CLI](https://github.com/golang-migrate/migrate?tab=readme-ov-file#cli-usage)
+- [k6](https://k6.io/docs/get-started/installation/) — optional, only needed for load testing
 
 ### 1. Clone and configure environment
 
@@ -150,20 +178,38 @@ without a port conflict.
 go test ./...
 ```
 
-Unit tests cover the usecase layer using mocked repositories (`testify/mock`); HTTP-dependent
-logic (e.g. uptime pings) is tested against `httptest.Server`.
+- **Unit tests** (`internal/usecase`, `internal/domain`, `internal/delivery/http`) use mocked
+  repositories (`testify/mock`) or `httptest`; fast, no external dependencies.
+- **Repository-level tests** (`internal/repository/postgres`, `internal/repository/redis`) spin
+  up real Postgres/Redis containers via testcontainers-go — a fresh container per test function
+  for full isolation, torn down automatically. **Requires Docker running locally.** These caught
+  a real bug (a divide-by-zero panic in the rate limiter for sub-second windows) that mocked
+  unit tests couldn't have found.
+
+## Load Testing
+
+```bash
+k6 run loadtest/ingest_load_test.js
+```
+
+Validates NFR-1 (ingestion endpoint sustains 100 req/s on one instance) using 100 API keys
+round-robined so no single key hits its own rate limit, plus a second scenario that deliberately
+overloads one API key to confirm the rate limiter rejects excess traffic with `429`s instead of
+degrading or crashing. Requires a running `cmd/api` instance with its own Postgres/Redis.
 
 ## API Documentation
 
-An OpenAPI 3.0 spec is planned to be generated and published as the API surface stabilizes.
+An OpenAPI 3.0 spec is planned to be generated and published as the API surface stabilizes; in
+the meantime, `04-API-DESIGN.md` in the planning docs is the authoritative reference, including
+rate limits and the refresh token flow.
 
 ## Project Status
 
-Actively developed as a portfolio project. Core feature set complete: auth, project management,
-error ingestion & grouping, realtime dashboard, alerting (email/Slack), uptime monitoring, and a
-public status page served by an isolated `cmd/status-api` service. Deployment (Render + GitHub
-Actions keep-warm cron) pending — all sprints are being finished before a single simultaneous
-deploy.
+Actively developed as a portfolio project. Sprints 1–9 complete: auth, project management, error
+ingestion & grouping, realtime dashboard, alerting (email/Slack), uptime monitoring, a public
+status page served by an isolated `cmd/status-api` service, and a full security-hardening pass
+(rate limiting, refresh tokens, audit logging, load testing — see [Security](#security)).
+Deployment (Render + GitHub Actions keep-warm cron) is the only remaining item before launch.
 
 ## License
 

@@ -163,8 +163,8 @@ func TestMonitorUsecase_Update_PartialFields_OnlyChangesGiven(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, 120, updated.IntervalSec)
-	assert.Equal(t, "https://old.example.com", updated.URL)      // tidak berubah
-	assert.Equal(t, "old@email.com", updated.ChannelTarget)      // tidak berubah
+	assert.Equal(t, "https://old.example.com", updated.URL) // tidak berubah
+	assert.Equal(t, "old@email.com", updated.ChannelTarget) // tidak berubah
 	publisher.AssertCalled(t, "Publish", mock.Anything, "", domain.MonitorSyncUpdated, mock.Anything)
 }
 

@@ -4,6 +4,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/MohdFarhanS/sentinelix-backend/internal/domain"
 	"github.com/MohdFarhanS/sentinelix-backend/pkg/jwt"
 )
 
@@ -16,6 +17,7 @@ func NewRouter(
 	monitorHandler *MonitorHandler,
 	wsHandler *WSHandler,
 	jwtManager *jwt.Manager,
+	dashboardRateLimiter domain.RateLimiter,
 	frontendURL string,
 ) *chi.Mux {
 	r := chi.NewRouter()
@@ -28,15 +30,21 @@ func NewRouter(
 		// Publik
 		r.Post("/auth/register", authHandler.Register)
 		r.Post("/auth/login", authHandler.Login)
+		r.Post("/auth/refresh", authHandler.Refresh)
 		r.Post("/auth/logout", authHandler.Logout)
 		r.Post("/ingest/event", ingestHandler.HandleIngestEvent)
 
-		// Protected — butuh JWT via httpOnly cookie
+		// Protected — butuh JWT via httpOnly cookie, DAN kena rate limit
+		// generik 300/menit per user (Sprint 9). Urutan Use() penting:
+		// AuthMiddleware dulu (isi context user_id), baru rate limiter
+		// (baca context itu).
 		r.Group(func(r chi.Router) {
 			r.Use(AuthMiddleware(jwtManager))
+			r.Use(DashboardRateLimitMiddleware(dashboardRateLimiter))
 
 			r.Post("/projects", projectHandler.Create)
 			r.Get("/projects", projectHandler.List)
+			r.Delete("/projects/{id}", projectHandler.Delete)
 			r.Get("/projects/{projectId}/issues", issueHandler.List)
 			r.Get("/issues/{id}", issueHandler.GetByID)
 			r.Get("/issues/{id}/events", issueHandler.ListEvents)

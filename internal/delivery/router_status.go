@@ -12,7 +12,7 @@ import (
 // dashboard (lihat 05-ARCHITECTURE.md §6c) — status page di-fetch
 // server-side dari Next.js ISR, bukan langsung dari browser, jadi CORS
 // browser-based tidak relevan di sini.
-func NewStatusRouter(StatusHandler *StatusHandler) *chi.Mux {
+func NewStatusRouter(statusHandler *StatusHandler) *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger)
@@ -26,7 +26,7 @@ func NewStatusRouter(StatusHandler *StatusHandler) *chi.Mux {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	r.Get("/api/v1/status/{slug}", StatusHandler.GetBySlug)
+	r.Get("/api/v1/status/{slug}", statusHandler.GetBySlug)
 
 	return r
 }

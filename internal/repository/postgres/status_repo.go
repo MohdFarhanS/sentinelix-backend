@@ -88,9 +88,9 @@ func (r *StatusRepository) GetProjectStatusBySlug(ctx context.Context, slug stri
 			displayName = url
 		}
 		monitors = append(monitors, domain.MonitorStatusData{
-			Name:		displayName,
-			RawStatus: 	status,
-			Uptime30d: 	uptime30d,
+			Name:      displayName,
+			RawStatus: status,
+			Uptime30d: uptime30d,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -99,6 +99,6 @@ func (r *StatusRepository) GetProjectStatusBySlug(ctx context.Context, slug stri
 
 	return &domain.ProjectStatusData{
 		ProjectName: projectName,
-		Monitors: monitors,
+		Monitors:    monitors,
 	}, nil
 }

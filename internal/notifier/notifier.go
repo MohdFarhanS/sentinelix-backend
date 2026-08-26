@@ -16,16 +16,16 @@ import (
 // alert_rules.channel), jadi tidak ada fan-out ke email+slack sekaligus
 // dari satu rule yang sama.
 type MultiNotifier struct {
-	resendAPIKey	string
-	emailFrom		string
-	httpClient		*http.Client
+	resendAPIKey string
+	emailFrom    string
+	httpClient   *http.Client
 }
 
 func NewMultiNotifier(resendAPIKey, emailFrom string) *MultiNotifier {
 	return &MultiNotifier{
-		resendAPIKey: 	resendAPIKey,
-		emailFrom: 		emailFrom,
-		httpClient: 	&http.Client{Timeout: 10 * time.Second},
+		resendAPIKey: resendAPIKey,
+		emailFrom:    emailFrom,
+		httpClient:   &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
@@ -41,10 +41,10 @@ func (n *MultiNotifier) Notify(ctx context.Context, rule *domain.AlertRule, issu
 }
 
 type resendEmailPayload struct {
-	From		string		`json:"from"`
-	To			[]string	`json:"to"`
-	Subject		string		`json:"subject"`
-	Html		string		`json:"html"`
+	From    string   `json:"from"`
+	To      []string `json:"to"`
+	Subject string   `json:"subject"`
+	Html    string   `json:"html"`
 }
 
 // sendEmail panggil Resend REST API langsung via net/http (bukan pakai
@@ -52,8 +52,8 @@ type resendEmailPayload struct {
 // dependency baru untuk itu.
 func (n *MultiNotifier) sendEmail(ctx context.Context, to string, issue *domain.Issue) error {
 	body := resendEmailPayload{
-		From: n.emailFrom,
-		To: []string{to},
+		From:    n.emailFrom,
+		To:      []string{to},
 		Subject: fmt.Sprintf("[SentinelIX] Alert: %s", issue.Title),
 		Html: fmt.Sprintf(
 			"<p>Issue <b>%s<b> triggered an alert.</p><p>Count: %d</p><p>Last seen: %s</p>",
@@ -85,7 +85,7 @@ func (n *MultiNotifier) sendEmail(ctx context.Context, to string, issue *domain.
 }
 
 type slackPayload struct {
-	Text string	`json:"text"`
+	Text string `json:"text"`
 }
 
 func (n *MultiNotifier) sendSlack(ctx context.Context, webhookURL string, issue *domain.Issue) error {

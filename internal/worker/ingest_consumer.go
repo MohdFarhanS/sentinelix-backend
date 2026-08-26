@@ -9,8 +9,8 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/MohdFarhanS/sentinelix-backend/internal/domain"
-	"github.com/MohdFarhanS/sentinelix-backend/internal/usecase"
 	redisrepo "github.com/MohdFarhanS/sentinelix-backend/internal/repository/redis"
+	"github.com/MohdFarhanS/sentinelix-backend/internal/usecase"
 )
 
 const (
@@ -20,23 +20,23 @@ const (
 )
 
 type IngestConsumer struct {
-	client      	*redis.Client
-	logger      	zerolog.Logger
-	groupIssue  	*usecase.GroupIssueUsecase
-	broadcaster 	*redisrepo.Broadcaster
-	evaluateAlert	*usecase.EvaluateAlertUsecase
+	client        *redis.Client
+	logger        zerolog.Logger
+	groupIssue    *usecase.GroupIssueUsecase
+	broadcaster   *redisrepo.Broadcaster
+	evaluateAlert *usecase.EvaluateAlertUsecase
 }
 
 func NewIngestConsumer(
-	client *redis.Client, 
-	logger zerolog.Logger, 
-	groupIssue *usecase.GroupIssueUsecase, 
+	client *redis.Client,
+	logger zerolog.Logger,
+	groupIssue *usecase.GroupIssueUsecase,
 	broadcaster *redisrepo.Broadcaster,
 	evaluateAlert *usecase.EvaluateAlertUsecase,
-	) *IngestConsumer {
+) *IngestConsumer {
 	return &IngestConsumer{
-		client: client, logger: logger, groupIssue: groupIssue, 
-		broadcaster: broadcaster, evaluateAlert: evaluateAlert,}
+		client: client, logger: logger, groupIssue: groupIssue,
+		broadcaster: broadcaster, evaluateAlert: evaluateAlert}
 }
 
 func (c *IngestConsumer) ensureGroup(ctx context.Context) error {

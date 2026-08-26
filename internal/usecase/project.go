@@ -9,14 +9,39 @@ import (
 	"strings"
 
 	"github.com/MohdFarhanS/sentinelix-backend/internal/domain"
+	"github.com/rs/zerolog"
 )
 
 type ProjectUsecase struct {
-	projectRepo domain.ProjectRepository
+	projectRepo  domain.ProjectRepository
+	auditLogRepo domain.AuditLogRepository
+	logger       zerolog.Logger
 }
 
-func NewProjectUsecase(projectRepo domain.ProjectRepository) *ProjectUsecase {
-	return &ProjectUsecase{projectRepo: projectRepo}
+func NewProjectUsecase(projectRepo domain.ProjectRepository, auditLogRepo domain.AuditLogRepository, logger zerolog.Logger) *ProjectUsecase {
+	return &ProjectUsecase{projectRepo: projectRepo, auditLogRepo: auditLogRepo, logger: logger}
+}
+
+// writeAuditLog — dipusatkan di sini karena DIPAKAI DUA KALI di dalam
+// struct yang SAMA (Create & Delete) — beda dari kasus AlertRuleUsecase
+// yang punya method sendiri; itu bukan duplikasi lintas-tipe, ini
+// duplikasi ASLI di dalam satu tipe yang sama, jadi extract di sini valid,
+// bukan premature abstraction.
+func (uc *ProjectUsecase) writeAuditLog(ctx context.Context, actorUserID, action, resourceID string, metadata map[string]any) {
+	if err := uc.auditLogRepo.Create(ctx, &domain.AuditLog{
+		ActorUserID:  &actorUserID,
+		Action:       action,
+		ResourceType: domain.ResourceTypeProject,
+		ResourceID:   resourceID,
+		Metadata:     metadata,
+	}); err != nil {
+		uc.logger.Error().
+			Err(err).
+			Str("action", action).
+			Str("resource_id", resourceID).
+			Str("actor_user_id", actorUserID).
+			Msg("failed to write audit log")
+	}
 }
 
 type CreateProjectInput struct {
@@ -28,7 +53,7 @@ type CreateProjectOutput struct {
 	ID     string
 	Name   string
 	Slug   string
-	APIKey string // plaintext — hanya dikembalikan sekali di sini
+	APIKey string
 }
 
 var slugSanitizer = regexp.MustCompile(`[^a-z0-9]+`)
@@ -43,14 +68,8 @@ func slugify(name string) string {
 	return s
 }
 
-// APIKeyPrefix di-export supaya bisa dirujuk dari test tanpa duplikasi
-// string literal — satu sumber kebenaran, tidak perlu ubah 2 tempat kalau
-// prefix-nya ganti lagi nanti.
 const APIKeyPrefix = "si_live_"
 
-// generateAPIKey bikin API key plaintext format si_live_<32 hex char>
-// (sesuai contoh di 04-API-DESIGN.md §3) + hash SHA-256-nya buat disimpan
-// di kolom api_key_hash — konsisten dengan cara lookup di ingest (Sprint 2).
 func generateAPIKey() (plaintext, hash string, err error) {
 	raw := make([]byte, 16)
 	if _, err := rand.Read(raw); err != nil {
@@ -62,9 +81,6 @@ func generateAPIKey() (plaintext, hash string, err error) {
 	return plaintext, hash, nil
 }
 
-// randomSlugSuffix nambah entropi kecil ke slug supaya risiko bentrok di
-// UNIQUE(slug) rendah, tanpa retry-loop query DB (YAGNI — kalau nanti
-// collision beneran kejadian di practice, baru kita tambah retry).
 func randomSlugSuffix() string {
 	raw := make([]byte, 3)
 	_, _ = rand.Read(raw)
@@ -88,6 +104,10 @@ func (uc *ProjectUsecase) Create(ctx context.Context, in CreateProjectInput) (*C
 		return nil, err
 	}
 
+	uc.writeAuditLog(ctx, in.UserID, domain.ActionProjectAPIKeyCreated, p.ID, map[string]any{
+		"project_name": p.Name,
+	})
+
 	return &CreateProjectOutput{ID: p.ID, Name: p.Name, Slug: p.Slug, APIKey: apiKey}, nil
 }
 
@@ -110,18 +130,37 @@ func (uc *ProjectUsecase) List(ctx context.Context, userID string) ([]ProjectSum
 	return summaries, nil
 }
 
-// VerifyOwnership mengecek project exist DAN dimiliki oleh userID. Dipakai
-// di tempat yang cuma butuh cek akses tanpa perlu data project lengkap
-// (misal: WS handshake sebelum upgrade connection) — pola ownership-check
-// yang sama seperti IssueUsecase.getOwnedIssue, cuma untuk project secara
-// langsung (bukan lewat issue).
 func (uc *ProjectUsecase) VerifyOwnership(ctx context.Context, userID, projectID string) error {
 	project, err := uc.projectRepo.GetByID(ctx, projectID)
 	if err != nil {
-		return err // termasuk domain.ErrProjectNotFound
+		return err
 	}
 	if project.UserID != userID {
 		return ErrForbidden
 	}
+	return nil
+}
+
+// Delete — ownership check dulu (pola sama seperti VerifyOwnership /
+// getOwnedAlertRule), baru hapus. Metadata audit log nyimpen nama project
+// (bukan API key/hash-nya — konsisten sama Create) SEBELUM dihapus, karena
+// setelah ini project-nya sudah tidak ada buat dicek lagi.
+func (uc *ProjectUsecase) Delete(ctx context.Context, userID, projectID string) error {
+	project, err := uc.projectRepo.GetByID(ctx, projectID)
+	if err != nil {
+		return err
+	}
+	if project.UserID != userID {
+		return ErrForbidden
+	}
+
+	if err := uc.projectRepo.Delete(ctx, projectID); err != nil {
+		return err
+	}
+
+	uc.writeAuditLog(ctx, userID, domain.ActionProjectDeleted, project.ID, map[string]any{
+		"project_name": project.Name,
+	})
+
 	return nil
 }

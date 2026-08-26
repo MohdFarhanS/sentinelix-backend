@@ -33,15 +33,15 @@ func (uc *GetStatusPageUsecase) Execute(ctx context.Context, slug string) (*doma
 	for _, m := range data.Monitors {
 		rawStatuses = append(rawStatuses, m.RawStatus)
 		monitors = append(monitors, domain.StatusMonitorInfo{
-			Name: 		m.Name,
-			IsUp: 		domain.MonitorIsUp(m.RawStatus),
-			Uptime30d: 	m.Uptime30d,
+			Name:      m.Name,
+			IsUp:      domain.MonitorIsUp(m.RawStatus),
+			Uptime30d: m.Uptime30d,
 		})
 	}
 
 	return &domain.StatusPageResponse{
-		ProjectName: data.ProjectName,
+		ProjectName:   data.ProjectName,
 		OverallStatus: domain.ComputeOverallStatus(rawStatuses),
-		Monitors: monitors,
+		Monitors:      monitors,
 	}, nil
 }

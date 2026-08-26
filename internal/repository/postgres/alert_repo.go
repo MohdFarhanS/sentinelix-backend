@@ -27,9 +27,9 @@ func (r *AlertRuleRepository) Create(ctx context.Context, rule *domain.AlertRule
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, created_at
 	`
-	
-	return r.db.QueryRow(ctx, query, 
-		rule.ProjectID, rule.ConditionType, rule.Threshold, rule.WindowMinutes, 
+
+	return r.db.QueryRow(ctx, query,
+		rule.ProjectID, rule.ConditionType, rule.Threshold, rule.WindowMinutes,
 		rule.CooldownMinutes, rule.Channel, rule.ChannelTarget,
 	).Scan(&rule.ID, &rule.CreatedAt)
 }

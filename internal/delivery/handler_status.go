@@ -13,8 +13,8 @@ import (
 )
 
 type StatusHandler struct {
-	getStatusPageUsecase	*usecase.GetStatusPageUsecase
-	logger					zerolog.Logger
+	getStatusPageUsecase *usecase.GetStatusPageUsecase
+	logger               zerolog.Logger
 }
 
 func NewStatusHandler(getStatusPageUsecase *usecase.GetStatusPageUsecase, logger zerolog.Logger) *StatusHandler {
@@ -22,15 +22,15 @@ func NewStatusHandler(getStatusPageUsecase *usecase.GetStatusPageUsecase, logger
 }
 
 type statusMonitorResponse struct {
-	Name		string	`json:"name"`
-	IsUp		bool	`json:"is_up"`
-	Uptime30d	float64	`json:"uptime_30d"`
+	Name      string  `json:"name"`
+	IsUp      bool    `json:"is_up"`
+	Uptime30d float64 `json:"uptime_30d"`
 }
 
 type statusPageResponseDTO struct {
-	ProjectName		string					`json:"project_name"`
-	OverallStatus	string					`json:"overall_status"`
-	Monitors		[]statusMonitorResponse	`json:"monitors"`
+	ProjectName   string                  `json:"project_name"`
+	OverallStatus string                  `json:"overall_status"`
+	Monitors      []statusMonitorResponse `json:"monitors"`
 }
 
 // writeStatusJSON & writeStatusError SENGAJA duplikat kecil dari
@@ -67,15 +67,15 @@ func (h *StatusHandler) GetBySlug(w http.ResponseWriter, r *http.Request) {
 	monitors := make([]statusMonitorResponse, 0, len(result.Monitors))
 	for _, m := range result.Monitors {
 		monitors = append(monitors, statusMonitorResponse{
-			Name: 		m.Name,
-			IsUp: 		m.IsUp,
-			Uptime30d: 	m.Uptime30d,
+			Name:      m.Name,
+			IsUp:      m.IsUp,
+			Uptime30d: m.Uptime30d,
 		})
 	}
 
 	writeStatusJSON(w, http.StatusOK, statusPageResponseDTO{
-		ProjectName: 	result.ProjectName,
-		OverallStatus: 	result.OverallStatus,
-		Monitors: 		monitors,
+		ProjectName:   result.ProjectName,
+		OverallStatus: result.OverallStatus,
+		Monitors:      monitors,
 	})
 }

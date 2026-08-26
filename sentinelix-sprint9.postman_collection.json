@@ -1,0 +1,226 @@
+{
+    "info": {
+      "name": "SentinelIX — Sprint 9 Security",
+      "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+      {
+        "name": "1. Refresh Token Flow",
+        "item": [
+          {
+            "name": "1.1 Register (setup)",
+            "event": [
+              {
+                "listen": "prerequest",
+                "script": {
+                  "exec": [
+                    "// Email unik tiap run collection, biar gak kena 409 EMAIL_EXISTS pas re-run berulang",
+                    "pm.environment.set('test_email', `sprint9-test-${Date.now()}@sentinelix.com`);"
+                  ]
+                }
+              },
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 201 Created', () => pm.response.to.have.status(201));",
+                    "pm.test('Response punya email yang benar', () => {",
+                    "  const body = pm.response.json();",
+                    "  pm.expect(body.email).to.eql(pm.environment.get('test_email'));",
+                    "});"
+                  ]
+                }
+              }
+            ],
+            "request": {
+              "method": "POST",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"email\": \"{{test_email}}\",\n  \"password\": \"{{test_password}}\"\n}"
+              },
+              "url": "{{base_url}}/auth/register"
+            }
+          },
+          {
+            "name": "1.2 Login",
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+                    "",
+                    "const body = pm.response.json();",
+                    "pm.test('Response punya access_token', () => pm.expect(body.access_token).to.be.a('string').and.not.empty);",
+                    "pm.test('expires_in = 900 (15 menit)', () => pm.expect(body.expires_in).to.eql(900));",
+                    "",
+                    "pm.environment.set('access_token_after_login', body.access_token);",
+                    "",
+                    "// PENTING: simpan refresh_token SEBELUM step Refresh nanti menimpanya",
+                    "const refreshCookie = pm.cookies.get('refresh_token');",
+                    "pm.test('Cookie refresh_token ter-set', () => pm.expect(refreshCookie).to.not.be.undefined);",
+                    "pm.environment.set('old_refresh_token', refreshCookie);"
+                  ]
+                }
+              }
+            ],
+            "request": {
+              "method": "POST",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"email\": \"{{test_email}}\",\n  \"password\": \"{{test_password}}\"\n}"
+              },
+              "url": "{{base_url}}/auth/login"
+            }
+          },
+          {
+            "name": "1.3 Access Protected Endpoint (sanity check)",
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 200 OK — access_token cookie valid', () => pm.response.to.have.status(200));"
+                  ]
+                }
+              }
+            ],
+            "request": {
+              "method": "GET",
+              "url": "{{base_url}}/projects"
+            }
+          },
+          {
+            "name": "1.4 Refresh",
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+                    "",
+                    "const body = pm.response.json();",
+                    "pm.test('access_token baru berbeda dari yang lama', () => {",
+                    "  pm.expect(body.access_token).to.not.eql(pm.environment.get('access_token_after_login'));",
+                    "});",
+                    "pm.environment.set('access_token_after_refresh', body.access_token);",
+                    "",
+                    "const newRefreshCookie = pm.cookies.get('refresh_token');",
+                    "pm.test('refresh_token ROTASI — cookie baru beda dari yang lama', () => {",
+                    "  pm.expect(newRefreshCookie).to.not.eql(pm.environment.get('old_refresh_token'));",
+                    "});"
+                  ]
+                }
+              }
+            ],
+            "request": {
+              "method": "POST",
+              "url": "{{base_url}}/auth/refresh"
+            }
+          },
+          {
+            "name": "1.5 Reuse Old Refresh Token (harus gagal)",
+            "event": [
+              {
+                "listen": "prerequest",
+                "script": {
+                  "exec": [
+                    "// Override header Cookie manual pakai token LAMA (dari step 1.2, sebelum rotasi)",
+                    "// — bukan cookie jar otomatis, yang sekarang isinya token BARU hasil step 1.4.",
+                    "pm.request.headers.upsert({",
+                    "  key: 'Cookie',",
+                    "  value: `refresh_token=${pm.environment.get('old_refresh_token')}`",
+                    "});"
+                  ]
+                }
+              },
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 401 — token lama ditolak (reuse detection)', () => pm.response.to.have.status(401));",
+                    "",
+                    "const body = pm.response.json();",
+                    "pm.test('Error code INVALID_REFRESH_TOKEN', () => {",
+                    "  pm.expect(body.error.code).to.eql('INVALID_REFRESH_TOKEN');",
+                    "});"
+                  ]
+                }
+              }
+            ],
+            "request": {
+              "method": "POST",
+              "url": "{{base_url}}/auth/refresh"
+            }
+          },
+          {
+            "name": "1.6 Logout",
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 204 No Content', () => pm.response.to.have.status(204));"
+                  ]
+                }
+              }
+            ],
+            "request": {
+              "method": "POST",
+              "url": "{{base_url}}/auth/logout"
+            }
+          },
+          {
+            "name": "1.7 Refresh After Logout (harus gagal)",
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 401 — refresh token sudah di-revoke oleh Logout', () => pm.response.to.have.status(401));"
+                  ]
+                }
+              }
+            ],
+            "request": {
+              "method": "POST",
+              "url": "{{base_url}}/auth/refresh"
+            }
+          }
+        ]
+      },
+      {
+        "name": "2. Login Rate Limiting",
+        "item": [
+          {
+            "name": "2.1 Login Salah Berulang (6x)",
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "// Jalankan request ini 6x BERTURUT-TURUT via tombol Send (bukan Runner,",
+                    "// biar gampang lihat response satu-satu). Attempt ke-1 s/d ke-5 harus",
+                    "// 401 INVALID_CREDENTIAL (password salah, tapi belum kena limit).",
+                    "// Attempt ke-6 harus 429 RATE_LIMITED (limit email: 5/15menit terlampaui).",
+                    "console.log('Status:', pm.response.code);"
+                  ]
+                }
+              }
+            ],
+            "request": {
+              "method": "POST",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"email\": \"{{test_email}}\",\n  \"password\": \"password-salah-sengaja\"\n}"
+              },
+              "url": "{{base_url}}/auth/login"
+            }
+          }
+        ]
+      }
+    ]
+  }

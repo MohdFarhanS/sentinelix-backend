@@ -21,37 +21,37 @@ func NewAlertRuleHandler(alertRuleUsecase *usecase.AlertRuleUsecase) *AlertRuleH
 }
 
 type createAlertRuleRequest struct {
-	ConditionType	string 	`json:"condition_type"`
-	Threshold		int		`json:"threshold"`
-	WindowMinutes	int		`json:"window_minutes"`
-	CooldownMinutes	int		`json:"cooldown_minutes"`
-	Channel			string	`json:"channel"`
-	ChannelTarget	string	`json:"channel_target"`
+	ConditionType   string `json:"condition_type"`
+	Threshold       int    `json:"threshold"`
+	WindowMinutes   int    `json:"window_minutes"`
+	CooldownMinutes int    `json:"cooldown_minutes"`
+	Channel         string `json:"channel"`
+	ChannelTarget   string `json:"channel_target"`
 }
 
 type alertRuleResponse struct {
-	ID				string	`json:"id"`
-	ProjectID		string	`json:"project_id"`
-	ConditionType	string	`json:"condition_type"`
-	Threshold		int		`json:"threshold"`
-	WindowMinutes	int		`json:"window_minutes"`
-	CooldownMinutes	int		`json:"cooldown_minutes"`
-	Channel			string	`json:"channel"`
-	ChannelTarget	string	`json:"channel_target"`
-	CreatedAt		string	`json:"created_at"`
+	ID              string `json:"id"`
+	ProjectID       string `json:"project_id"`
+	ConditionType   string `json:"condition_type"`
+	Threshold       int    `json:"threshold"`
+	WindowMinutes   int    `json:"window_minutes"`
+	CooldownMinutes int    `json:"cooldown_minutes"`
+	Channel         string `json:"channel"`
+	ChannelTarget   string `json:"channel_target"`
+	CreatedAt       string `json:"created_at"`
 }
 
 func toAlertRuleResponse(r *domain.AlertRule) alertRuleResponse {
 	return alertRuleResponse{
-		ID:					r.ID,
-		ProjectID: 			r.ProjectID,
-		ConditionType: 		r.ConditionType,
-		Threshold: 			r.Threshold,
-		WindowMinutes: 		r.WindowMinutes,
-		CooldownMinutes: 	r.CooldownMinutes,
-		Channel: 			r.Channel,
-		ChannelTarget: 		r.ChannelTarget,
-		CreatedAt: 			r.CreatedAt.UTC().Format(time.RFC3339),
+		ID:              r.ID,
+		ProjectID:       r.ProjectID,
+		ConditionType:   r.ConditionType,
+		Threshold:       r.Threshold,
+		WindowMinutes:   r.WindowMinutes,
+		CooldownMinutes: r.CooldownMinutes,
+		Channel:         r.Channel,
+		ChannelTarget:   r.ChannelTarget,
+		CreatedAt:       r.CreatedAt.UTC().Format(time.RFC3339),
 	}
 }
 
@@ -76,16 +76,16 @@ func (h *AlertRuleHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if req.CooldownMinutes == 0 {
 		req.CooldownMinutes = 60
 	}
-	
+
 	rule, err := h.alertRuleUsecase.Create(r.Context(), usecase.CreateAlertRuleInput{
-		UserID:				userID,
-		ProjectID: 			projectID,
-		ConditionType: 		req.ConditionType,
-		Threshold: 			req.Threshold,
-		WindowMinutes: 		req.WindowMinutes,
-		CooldownMinutes: 	req.CooldownMinutes,
-		Channel: 			req.Channel,
-		ChannelTarget: 		req.ChannelTarget,
+		UserID:          userID,
+		ProjectID:       projectID,
+		ConditionType:   req.ConditionType,
+		Threshold:       req.Threshold,
+		WindowMinutes:   req.WindowMinutes,
+		CooldownMinutes: req.CooldownMinutes,
+		Channel:         req.Channel,
+		ChannelTarget:   req.ChannelTarget,
 	})
 	if err != nil {
 		switch {
@@ -121,8 +121,8 @@ func (h *AlertRuleHandler) List(w http.ResponseWriter, r *http.Request) {
 	projectID := chi.URLParam(r, "projectId")
 
 	rules, err := h.alertRuleUsecase.List(r.Context(), usecase.ListAlertRulesInput{
-		UserID: 	userID,
-		ProjectID: 	projectID,
+		UserID:    userID,
+		ProjectID: projectID,
 	})
 	if err != nil {
 		switch {
@@ -147,12 +147,12 @@ func (h *AlertRuleHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateAlertRuleRequest struct {
-	ConditionType		*string	`json:"condition_type"`
-	Threshold			*int	`json:"threshold"`
-	WindowMinutes		*int	`json:"window_minutes"`
-	CooldownMinutes		*int	`json:"cooldown_minutes"`
-	Channel				*string	`json:"channel"`
-	ChannelTarget		*string	`json:"channel_target"`
+	ConditionType   *string `json:"condition_type"`
+	Threshold       *int    `json:"threshold"`
+	WindowMinutes   *int    `json:"window_minutes"`
+	CooldownMinutes *int    `json:"cooldown_minutes"`
+	Channel         *string `json:"channel"`
+	ChannelTarget   *string `json:"channel_target"`
 }
 
 func (h *AlertRuleHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -170,15 +170,15 @@ func (h *AlertRuleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rule, err :=h.alertRuleUsecase.Update(r.Context(), usecase.UpdateAlertRuleInput{
-		UserID: 			userID,
-		AlertRuleID: 		ruleID,
-		ConditionType: 		req.ConditionType,
-		Threshold: 			req.Threshold,
-		WindowMinutes: 		req.WindowMinutes,
-		CooldownMinutes: 	req.CooldownMinutes,
-		Channel: 			req.Channel,
-		ChannelTarget: 		req.ChannelTarget,
+	rule, err := h.alertRuleUsecase.Update(r.Context(), usecase.UpdateAlertRuleInput{
+		UserID:          userID,
+		AlertRuleID:     ruleID,
+		ConditionType:   req.ConditionType,
+		Threshold:       req.Threshold,
+		WindowMinutes:   req.WindowMinutes,
+		CooldownMinutes: req.CooldownMinutes,
+		Channel:         req.Channel,
+		ChannelTarget:   req.ChannelTarget,
 	})
 	if err != nil {
 		switch {
@@ -208,7 +208,7 @@ func (h *AlertRuleHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AlertRuleHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	userID, ok :=UserIDFromContext(r.Context())
+	userID, ok := UserIDFromContext(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated")
 		return
@@ -217,15 +217,15 @@ func (h *AlertRuleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	ruleID := chi.URLParam(r, "id")
 
 	err := h.alertRuleUsecase.Delete(r.Context(), usecase.DeleteAlertRuleInput{
-		UserID: 		userID,
-		AlertRuleID: 	ruleID,
+		UserID:      userID,
+		AlertRuleID: ruleID,
 	})
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrAlertRuleNotFound):
 			writeError(w, http.StatusNotFound, "ALERT_RULE_NOT_FOUND", "Alert not found")
 		case errors.Is(err, domain.ErrProjectNotFound):
-			writeError(w, http.StatusNotFound, "PROJECT_NOT_FOUND","Project not found")
+			writeError(w, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project not found")
 		case errors.Is(err, usecase.ErrForbidden):
 			writeError(w, http.StatusForbidden, "FORBIDDEN", "You don't have access to this alert rule")
 		default:

@@ -15,10 +15,10 @@ var ErrForbidden = errors.New("access forbidden: This project does not belong to
 type IssueUsecase struct {
 	issueRepo   domain.IssueRepository
 	projectRepo domain.ProjectRepository
-	eventRepo domain.EventRepository
+	eventRepo   domain.EventRepository
 }
 
-func NewIssueUsecase(issueRepo domain.IssueRepository, projectRepo domain.ProjectRepository, eventRepo domain.EventRepository,) *IssueUsecase {
+func NewIssueUsecase(issueRepo domain.IssueRepository, projectRepo domain.ProjectRepository, eventRepo domain.EventRepository) *IssueUsecase {
 	return &IssueUsecase{issueRepo: issueRepo, projectRepo: projectRepo, eventRepo: eventRepo}
 }
 
@@ -73,9 +73,9 @@ func (uc *IssueUsecase) GetByID(ctx context.Context, userID, IssueID string) (*d
 }
 
 type ListEventsInput struct {
-	UserID		string
-	IssueID		string
-	Limit		int
+	UserID  string
+	IssueID string
+	Limit   int
 }
 
 func (uc *IssueUsecase) ListEvents(ctx context.Context, in ListEventsInput) ([]*domain.Event, error) {

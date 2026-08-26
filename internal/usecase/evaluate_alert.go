@@ -17,26 +17,26 @@ type Notifier interface {
 }
 
 type EvaluateAlertUsecase struct {
-	alertRuleRepo 	domain.AlertRuleRepository
-	alertLogRepo 	domain.AlertLogRepository
-	issueRepo 		domain.IssueRepository
-	eventRepo 		domain.EventRepository
-	notifier 		Notifier
+	alertRuleRepo domain.AlertRuleRepository
+	alertLogRepo  domain.AlertLogRepository
+	issueRepo     domain.IssueRepository
+	eventRepo     domain.EventRepository
+	notifier      Notifier
 }
 
 func NewEvaluateAlertUsecase(
-	alertRuleRepo 	domain.AlertRuleRepository,
-	alertLogRepo 	domain.AlertLogRepository,
-	issueRepo 		domain.IssueRepository,
-	eventRepo 		domain.EventRepository,
-	notifier 		Notifier,
+	alertRuleRepo domain.AlertRuleRepository,
+	alertLogRepo domain.AlertLogRepository,
+	issueRepo domain.IssueRepository,
+	eventRepo domain.EventRepository,
+	notifier Notifier,
 ) *EvaluateAlertUsecase {
 	return &EvaluateAlertUsecase{
-		alertRuleRepo: 	alertRuleRepo,
-		alertLogRepo: 	alertLogRepo,
-		issueRepo: 		issueRepo,
-		eventRepo: 		eventRepo,
-		notifier: 		notifier,
+		alertRuleRepo: alertRuleRepo,
+		alertLogRepo:  alertLogRepo,
+		issueRepo:     issueRepo,
+		eventRepo:     eventRepo,
+		notifier:      notifier,
 	}
 }
 
@@ -79,8 +79,8 @@ func (uc *EvaluateAlertUsecase) EvaluateThresholds(ctx context.Context) error {
 	// window_minutes beda, count-nya juga beda (window waktu beda),
 	// makanya key cache ikut window_minutes.
 	type cacheKey struct {
-		projectID		string
-		windowMinutes	int
+		projectID     string
+		windowMinutes int
 	}
 	countCache := make(map[cacheKey]map[string]int)
 
@@ -95,7 +95,7 @@ func (uc *EvaluateAlertUsecase) EvaluateThresholds(ctx context.Context) error {
 			}
 			countCache[key] = counts
 		}
-		
+
 		for issueID, count := range counts {
 			if count <= rule.Threshold {
 				continue
@@ -137,7 +137,7 @@ func (uc *EvaluateAlertUsecase) notifyIfNotCooldown(ctx context.Context, rule *d
 	}
 
 	return uc.alertLogRepo.Create(ctx, &domain.AlertLog{
-		AlertRuleID: 	rule.ID,
-		IssueID: 		issue.ID,
+		AlertRuleID: rule.ID,
+		IssueID:     issue.ID,
 	})
 }
