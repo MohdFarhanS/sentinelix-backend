@@ -1,10 +1,11 @@
+# .github/workflows/migrate.yml
 name: Database Migration
 
 on:
   workflow_dispatch:
     inputs:
       direction:
-        description: "Arah migration. Pilih 'check' dulu buat tes koneksi tanpa eksekusi apapun."
+        description: "Migration direction. Pick 'check' first to verify connectivity without running anything."
         required: true
         type: choice
         options:
@@ -13,7 +14,7 @@ on:
           - down
         default: check
       steps:
-        description: "Jumlah step migration. Kosongkan untuk 'up' = semua pending. WAJIB diisi untuk 'down'. Tidak dipakai untuk 'check'."
+        description: "Number of migration steps. Leave empty for 'up' = apply all pending. REQUIRED for 'down'. Unused for 'check'."
         required: false
         type: string
 
@@ -35,39 +36,39 @@ jobs:
           go-version: "1.25"
           cache: false
 
-      - name: Install golang-migrate CLI (postgres-only build, versi sama dengan go.mod)
+      - name: Install golang-migrate CLI (postgres-only build, matching go.mod version)
         run: go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.1
 
-      - name: Guard - 'down' wajib isi steps eksplisit
+      - name: Guard - 'down' requires explicit steps
         if: ${{ inputs.direction == 'down' && inputs.steps == '' }}
         run: |
-          echo "::error::Migration 'down' wajib isi jumlah steps eksplisit. Rollback tanpa batas steps tidak diizinkan lewat workflow ini."
+          echo "::error::Migration 'down' requires an explicit number of steps. Rolling back without a step limit is not allowed through this workflow."
           exit 1
 
-      - name: Cek versi migration saat ini
-        run: migrate -database "$DATABASE_URL" -path migrations version || echo "belum ada migration yang jalan sebelumnya"
+      - name: Check current migration version
+        run: migrate -database "$DATABASE_URL" -path migrations version || echo "no migration has run on this database yet"
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
-      - name: Jalankan migration UP (semua pending)
+      - name: Run migration UP (all pending)
         if: ${{ inputs.direction == 'up' && inputs.steps == '' }}
         run: migrate -database "$DATABASE_URL" -path migrations up
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
-      - name: Jalankan migration UP (N steps)
+      - name: Run migration UP (N steps)
         if: ${{ inputs.direction == 'up' && inputs.steps != '' }}
         run: migrate -database "$DATABASE_URL" -path migrations up ${{ inputs.steps }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
-      - name: Jalankan migration DOWN (N steps)
+      - name: Run migration DOWN (N steps)
         if: ${{ inputs.direction == 'down' }}
         run: migrate -database "$DATABASE_URL" -path migrations down ${{ inputs.steps }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
-      - name: Cek versi migration setelah eksekusi
+      - name: Check migration version after execution
         if: ${{ inputs.direction != 'check' }}
         run: migrate -database "$DATABASE_URL" -path migrations version
         env:
