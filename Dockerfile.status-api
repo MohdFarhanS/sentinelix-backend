@@ -1,0 +1,34 @@
+# Dockerfile.status-api
+
+# --- Build stage ---
+FROM golang:1.25-alpine AS builder
+
+WORKDIR /app
+
+# Copy go.mod/go.sum dulu, terpisah dari source code — memanfaatkan Docker
+# layer cache: selama dependency tidak berubah, "go mod download" tidak
+# perlu diulang walau source code lain berubah (build jauh lebih cepat
+# di run berikutnya).
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+# CGO_ENABLED=0 -> static binary, aman jalan di alpine (musl libc) tanpa
+# dependency C library. pgx/v5 (driver Postgres) murni Go, tidak butuh cgo.
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/status-api ./cmd/status-api
+
+# --- Final stage ---
+FROM alpine:3.20
+
+# ca-certificates WAJIB di-install manual — base image alpine TIDAK
+# menyertakan CA bundle secara default. Tanpa ini, koneksi TLS ke Neon
+# (Postgres, sslmode=require) akan gagal verifikasi sertifikat saat runtime.
+RUN apk add --no-cache ca-certificates
+
+WORKDIR /app
+COPY --from=builder /app/bin/status-api .
+
+EXPOSE 8081
+
+ENTRYPOINT ["./status-api"]
