@@ -1,0 +1,29 @@
+# --- Build stage ---
+FROM golang:1.25-alpine AS builder
+
+WORKDIR /app
+
+# Copy go.mod/go.sum dulu, terpisah dari source code — memanfaatkan Docker
+# layer cache: selama dependency tidak berubah, "go mod download" tidak
+# perlu diulang walau source code lain berubah.
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+# CGO_ENABLED=0 -> static binary, aman jalan di alpine (musl libc).
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/api ./cmd/api
+
+# --- Final stage ---
+FROM alpine:3.20
+
+# ca-certificates WAJIB — TLS ke Neon (Postgres) butuh CA bundle, alpine
+# base image tidak menyertakannya secara default.
+RUN apk add --no-cache ca-certificates
+
+WORKDIR /app
+COPY --from=builder /app/bin/api .
+
+EXPOSE 8080
+
+ENTRYPOINT ["./api"]
