@@ -49,6 +49,25 @@ func writeJSON(w http.ResponseWriter, status int, payload interface{}) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
+// cookieSameSite — frontend (Vercel) dan backend (Render) berada di site
+// yang BEDA di production (bukan cuma beda port seperti local dev), jadi
+// ini genuine cross-site request dari sudut pandang browser. SameSite=Lax
+// TIDAK PERNAH dikirim browser pada request fetch/XHR lintas-site (cuma
+// dikecualikan untuk navigasi halaman penuh) — harus SameSite=None supaya
+// cookie ikut terkirim di request API biasa.
+//
+// SameSite=None WAJIB berpasangan dengan Secure=true (browser menolak
+// cookie-nya kalau tidak) — makanya field ini dipetakan dari flag yang
+// SAMA dengan Secure (h.secureCookie), bukan hardcode terpisah. Di local
+// dev (secureCookie=false, http://localhost), tetap pakai Lax karena
+// frontend-backend di situ same-site (port beda tidak dihitung beda site).
+func (h *AuthHandler) cookieSameSite() http.SameSite {
+	if h.secureCookie {
+		return http.SameSiteNoneMode
+	}
+	return http.SameSiteLaxMode
+}
+
 // setAuthCookies & clearAuthCookies dipusatkan di sini — dipakai Login,
 // Refresh, DAN error path Refresh (token invalid tetap harus dibersihkan
 // dari browser, bukan dibiarkan nyangkut) — hindari duplikasi http.SetCookie
@@ -61,7 +80,7 @@ func (h *AuthHandler) setAuthCookies(w http.ResponseWriter, out *usecase.LoginOu
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   h.secureCookie,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: h.cookieSameSite(),
 		MaxAge:   int(out.ExpiresIn),
 	})
 	http.SetCookie(w, &http.Cookie{
@@ -70,7 +89,7 @@ func (h *AuthHandler) setAuthCookies(w http.ResponseWriter, out *usecase.LoginOu
 		Path:     refreshTokenCookiePath,
 		HttpOnly: true,
 		Secure:   h.secureCookie,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: h.cookieSameSite(),
 		MaxAge:   int(out.RefreshExpiresIn),
 	})
 }
@@ -78,11 +97,11 @@ func (h *AuthHandler) setAuthCookies(w http.ResponseWriter, out *usecase.LoginOu
 func (h *AuthHandler) clearAuthCookies(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name: AccessTokenCookieName, Value: "", Path: "/",
-		HttpOnly: true, Secure: h.secureCookie, SameSite: http.SameSiteLaxMode, MaxAge: -1,
+		HttpOnly: true, Secure: h.secureCookie, SameSite: h.cookieSameSite(), MaxAge: -1,
 	})
 	http.SetCookie(w, &http.Cookie{
 		Name: RefreshTokenCookieName, Value: "", Path: refreshTokenCookiePath,
-		HttpOnly: true, Secure: h.secureCookie, SameSite: http.SameSiteLaxMode, MaxAge: -1,
+		HttpOnly: true, Secure: h.secureCookie, SameSite: h.cookieSameSite(), MaxAge: -1,
 	})
 }
 
@@ -198,5 +217,5 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		_ = h.authUsecase.Logout(r.Context(), cookie.Value)
 	}
 	h.clearAuthCookies(w)
-	w.WriteHeader(http.StatusNoContent)
+	writeJSON(w, http.StatusOK, map[string]string{"message": "logged out"})
 }
