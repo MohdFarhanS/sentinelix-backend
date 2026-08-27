@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -80,14 +81,45 @@ func main() {
 	alertNotifierWorker := worker.NewAlertNotifierWorker(evaluateAlertUsecase, logger, time.Minute)
 	monitorSupervisor := worker.NewMonitorSupervisor(monitorRepo, monitorCheckerUsecase, logger)
 
-	// Jalankan 4 loop paralel. errCh nampung error PERTAMA yang muncul
-	// dari salah satu goroutine — begitu satu loop mati karena error
-	// (bukan context.Canceled), proses utama ikut exit.
-	errCh := make(chan error, 4)
+	// --- HTTP health endpoint ---
+	// Render free tier hanya punya tipe service "Web Service" (wajib
+	// listen HTTP) — tidak ada tipe "Background Worker" gratis. cmd/worker
+	// murni proses background (consumer, ticker), jadi endpoint ini
+	// SEMATA-MATA syarat deployment, bukan kebutuhan bisnis — tidak
+	// menyentuh logic worker manapun di atas.
+	healthMux := http.NewServeMux()
+	healthMux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8082"
+	}
+	healthServer := &http.Server{Addr: ":" + port, Handler: healthMux}
+
+	go func() {
+		<-ctx.Done()
+		_ = healthServer.Shutdown(context.Background())
+	}()
+
+	log.Printf("worker healthz endpoint running on port %s (env: %s)", port, cfg.Env)
+
+	// Jalankan 5 loop paralel (4 worker asli + 1 health endpoint). errCh
+	// nampung error PERTAMA yang muncul dari salah satu goroutine — begitu
+	// satu loop mati karena error (bukan context.Canceled), proses utama
+	// ikut exit.
+	errCh := make(chan error, 5)
 	go func() { errCh <- consumer.Run(ctx) }()
 	go func() { errCh <- alertNotifierWorker.Run(ctx) }()
 	go func() { errCh <- monitorSupervisor.Run(ctx) }()
 	go func() { errCh <- worker.RunMonitorSync(ctx, monitorSupervisor, broadcaster, logger) }()
+	go func() {
+		if err := healthServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errCh <- err
+			return
+		}
+		errCh <- nil
+	}()
 
 	if err := <-errCh; err != nil && err != context.Canceled {
 		logger.Fatal().Err(err).Msg("worker stopped with error")
