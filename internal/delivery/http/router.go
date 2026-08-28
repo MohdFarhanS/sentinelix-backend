@@ -1,6 +1,8 @@
 package http
 
 import (
+	"net/http"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
@@ -25,6 +27,14 @@ func NewRouter(
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(CORSMiddleware(frontendURL))
+
+	// /healthz di ROOT (bukan di bawah /api/v1) — konsisten dengan pola
+	// status-api & cmd/worker. Tanpa query DB, semata-mata syarat keep-warm
+	// Render, tidak boleh ikut membangunkan Neon (lihat 05-ARCHITECTURE.md
+	// §6c soal alasan yang sama di status-api).
+	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// Publik
