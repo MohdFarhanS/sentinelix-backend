@@ -69,10 +69,12 @@ func main() {
 	authUsecase := usecase.NewAuthUsecase(userRepo, refreshTokenRepo, jwtManager, loginIPLimiter, loginEmailLimiter)
 	authHandler := deliveryhttp.NewAuthHandler(authUsecase, cfg.Env == "production")
 
-	// Wiring ingest (Sprint 2) — projectRepo di-reuse di bawah buat project & issue usecase
+	// Wiring ingest (Sprint 2) — projectRepo di-reuse di bawah buat project & issue usecase.
+	// logger di-pass mulai Sprint 10 (audit resiliensi) — dipakai buat fail-open
+	// logging kalau rate limiter Redis error (lihat komentar di ingest_event.go).
 	projectRepo := postgres.NewProjectRepository(dbPool)
 	eventQueue := redisrepo.NewEventQueue(redisClient)
-	ingestUsecase := usecase.NewIngestEventUsecase(projectRepo, ingestRateLimiter, eventQueue)
+	ingestUsecase := usecase.NewIngestEventUsecase(projectRepo, ingestRateLimiter, eventQueue, logger)
 	ingestHandler := deliveryhttp.NewIngestHandler(ingestUsecase)
 
 	// Wiring WebSocket hub (Sprint 5) — broadcaster di-reuse lagi di

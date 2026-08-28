@@ -2,8 +2,10 @@ package usecase_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
@@ -45,7 +47,7 @@ func TestIngestEvent_Success(t *testing.T) {
 	limiter.On("Allow", mock.Anything, mock.Anything).Return(true, nil)
 	queue.On("Push", mock.Anything, mock.Anything).Return(nil)
 
-	uc := usecase.NewIngestEventUsecase(repo, limiter, queue)
+	uc := usecase.NewIngestEventUsecase(repo, limiter, queue, zerolog.Nop())
 	err := uc.Execute(context.Background(), usecase.IngestEventInput{
 		RawAPIKey: "si_live_valid",
 		Message:   "TypeError: something broke",
@@ -64,7 +66,7 @@ func TestIngestEvent_RateLimited(t *testing.T) {
 
 	limiter.On("Allow", mock.Anything, mock.Anything).Return(false, nil)
 
-	uc := usecase.NewIngestEventUsecase(repo, limiter, queue)
+	uc := usecase.NewIngestEventUsecase(repo, limiter, queue, zerolog.Nop())
 	err := uc.Execute(context.Background(), usecase.IngestEventInput{
 		RawAPIKey: "si_live_spammy",
 		Message:   "some error",
@@ -73,6 +75,35 @@ func TestIngestEvent_RateLimited(t *testing.T) {
 	assert.ErrorIs(t, err, usecase.ErrRateLimited)
 	repo.AssertNotCalled(t, "GetByAPIKeyHash")
 	queue.AssertNotCalled(t, "Push")
+}
+
+// TestIngestEvent_RateLimiterErrorFailsOpen — Sprint 10, hasil audit
+// resiliensi infra. SEBELUM fix ini, error dari rate limiter (misal Redis
+// Cloud down/limit) bikin event ASLI ikut ditolak (500), padahal masalahnya
+// di infra rate limiter, bukan di event-nya. Test ini mengunci perilaku
+// fail-open: Allow() error -> event TETAP diproses (GetByAPIKeyHash &
+// Push tetap dipanggil, Execute return nil) -- BUKAN mempropagasi error
+// rate limiter itu ke caller.
+func TestIngestEvent_RateLimiterErrorFailsOpen(t *testing.T) {
+	repo := new(mockProjectRepo)
+	limiter := new(mockRateLimiter)
+	queue := new(mockQueue)
+
+	limiter.On("Allow", mock.Anything, mock.Anything).
+		Return(false, errors.New("redis: connection refused"))
+	repo.On("GetByAPIKeyHash", mock.Anything, mock.Anything).
+		Return(&domain.Project{ID: "project-1"}, nil)
+	queue.On("Push", mock.Anything, mock.Anything).Return(nil)
+
+	uc := usecase.NewIngestEventUsecase(repo, limiter, queue, zerolog.Nop())
+	err := uc.Execute(context.Background(), usecase.IngestEventInput{
+		RawAPIKey: "si_live_valid",
+		Message:   "error during redis outage",
+	})
+
+	assert.NoError(t, err)
+	repo.AssertCalled(t, "GetByAPIKeyHash", mock.Anything, mock.Anything)
+	queue.AssertCalled(t, "Push", mock.Anything, mock.Anything)
 }
 
 func TestIngestEvent_InvalidAPIKey(t *testing.T) {
@@ -84,7 +115,7 @@ func TestIngestEvent_InvalidAPIKey(t *testing.T) {
 	repo.On("GetByAPIKeyHash", mock.Anything, mock.Anything).
 		Return(nil, domain.ErrProjectNotFound)
 
-	uc := usecase.NewIngestEventUsecase(repo, limiter, queue)
+	uc := usecase.NewIngestEventUsecase(repo, limiter, queue, zerolog.Nop())
 	err := uc.Execute(context.Background(), usecase.IngestEventInput{
 		RawAPIKey: "si_live_wrong",
 		Message:   "some error",
@@ -103,7 +134,7 @@ func TestIngestEvent_ValidationFails(t *testing.T) {
 	repo.On("GetByAPIKeyHash", mock.Anything, mock.Anything).
 		Return(&domain.Project{ID: "project-1"}, nil)
 
-	uc := usecase.NewIngestEventUsecase(repo, limiter, queue)
+	uc := usecase.NewIngestEventUsecase(repo, limiter, queue, zerolog.Nop())
 	err := uc.Execute(context.Background(), usecase.IngestEventInput{
 		RawAPIKey: "si_live_valid",
 		Message:   "",
