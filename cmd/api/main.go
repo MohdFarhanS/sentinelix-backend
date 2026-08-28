@@ -69,12 +69,17 @@ func main() {
 	authUsecase := usecase.NewAuthUsecase(userRepo, refreshTokenRepo, jwtManager, loginIPLimiter, loginEmailLimiter)
 	authHandler := deliveryhttp.NewAuthHandler(authUsecase, cfg.Env == "production")
 
-	// Wiring ingest (Sprint 2) — projectRepo di-reuse di bawah buat project & issue usecase.
-	// logger di-pass mulai Sprint 10 (audit resiliensi) — dipakai buat fail-open
-	// logging kalau rate limiter Redis error (lihat komentar di ingest_event.go).
+	// Wiring ingest (Sprint 2) — projectRepo di-reuse di bawah buat project & issue usecase
 	projectRepo := postgres.NewProjectRepository(dbPool)
 	eventQueue := redisrepo.NewEventQueue(redisClient)
-	ingestUsecase := usecase.NewIngestEventUsecase(projectRepo, ingestRateLimiter, eventQueue, logger)
+	// cachedProjectRepo — SENGAJA cuma dipakai ingestUsecase di bawah,
+	// BUKAN projectRepo mentah yang dipakai usecase lain (project CRUD,
+	// issue, alert rule, monitor). Alasan: GetByAPIKeyHash adalah hot path
+	// ingest (dipanggil TIAP request), sementara operasi CRUD project
+	// harus selalu baca data ter-terbaru, tidak boleh ikut cache. Lihat
+	// komentar lengkap di cached_project_repo.go soal trade-off TTL.
+	cachedProjectRepo := redisrepo.NewCachedProjectRepository(projectRepo, redisClient)
+	ingestUsecase := usecase.NewIngestEventUsecase(cachedProjectRepo, ingestRateLimiter, eventQueue, logger)
 	ingestHandler := deliveryhttp.NewIngestHandler(ingestUsecase)
 
 	// Wiring WebSocket hub (Sprint 5) — broadcaster di-reuse lagi di
