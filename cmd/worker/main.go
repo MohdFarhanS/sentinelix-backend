@@ -33,14 +33,12 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// --- Postgres ---
 	dbPool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("failed to connect to postgres: %v", err)
 	}
 	defer dbPool.Close()
 
-	// --- Redis ---
 	opt, err := redis.ParseURL(cfg.RedisURL)
 	if err != nil {
 		log.Fatalf("invalid REDIS_URL: %v", err)
@@ -50,7 +48,6 @@ func main() {
 
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 
-	// --- Wiring: repository ---
 	issueRepo := postgres.NewIssueRepository(dbPool)
 	eventRepo := postgres.NewEventRepository(dbPool)
 	alertRuleRepo := postgres.NewAlertRuleRepository(dbPool)
@@ -58,35 +55,28 @@ func main() {
 	monitorRepo := postgres.NewMonitorRepository(dbPool)
 	monitorCheckRepo := postgres.NewMonitorCheckRepository(dbPool)
 
-	// broadcaster dipindah ke atas (sebelum monitorCheckerUsecase) —
-	// sekarang dibutuhkan sebagai dependency-nya, bukan cuma buat
-	// consumer & monitor sync subscriber seperti sebelumnya.
 	broadcaster := redisrepo.NewBroadcaster(redisClient)
 
-	// --- Wiring: usecase ---
 	groupIssueUsecase := usecase.NewGroupIssueUsecase(issueRepo, eventRepo)
-	// multiNotifier mengimplementasikan DUA interface sekaligus:
-	// usecase.Notifier (buat EvaluateAlertUsecase, alert issue) DAN
-	// usecase.MonitorNotifier (buat MonitorCheckerUsecase, monitor down)
-	// — satu instance HTTP client di-reuse buat kedua concern.
 	multiNotifier := notifier.NewMultiNotifier(cfg.ResendAPIKey, cfg.EmailFromAddress)
 	evaluateAlertUsecase := usecase.NewEvaluateAlertUsecase(alertRuleRepo, alertLogRepo, issueRepo, eventRepo, multiNotifier)
-	// broadcaster di-pass juga ke monitorCheckerUsecase — dipakai buat
-	// broadcast monitor.status_changed ke dashboard client (BUKAN cuma
-	// buat monitor sync internal, lihat komentar di check_monitor.go).
 	monitorCheckerUsecase := usecase.NewMonitorCheckerUsecase(monitorRepo, monitorCheckRepo, multiNotifier, broadcaster)
 
-	// --- Wiring: worker ---
 	consumer := worker.NewIngestConsumer(redisClient, logger, groupIssueUsecase, broadcaster, evaluateAlertUsecase)
-	alertNotifierWorker := worker.NewAlertNotifierWorker(evaluateAlertUsecase, logger, time.Minute)
+	// Interval dinaikkan dari 1 menit -> 10 menit (Sprint 10, audit compute
+	// Neon). Ini CUMA mempengaruhi alert condition_type="threshold" (deteksi
+	// lonjakan sustained dalam window waktu) — alert condition_type=
+	// "new_issue" TETAP instant, karena itu event-driven langsung dari
+	// ingest_consumer di atas, tidak lewat ticker ini sama sekali. Target
+	// PRD "<60 detik dari error ke notifikasi" (01-PRD.md §7) tidak
+	// terdampak, karena metrik itu diukur dari jalur new_issue.
+	//
+	// Alasan diperbesar: ticker 1 menit bikin Neon TIDAK PERNAH sempat
+	// idle 5 menit buat auto-suspend (lihat README backend, "A deliberate
+	// trade-off") -- 10 menit ngasih jeda jelas di atas threshold itu.
+	alertNotifierWorker := worker.NewAlertNotifierWorker(evaluateAlertUsecase, logger, 10*time.Minute)
 	monitorSupervisor := worker.NewMonitorSupervisor(monitorRepo, monitorCheckerUsecase, logger)
 
-	// --- HTTP health endpoint ---
-	// Render free tier hanya punya tipe service "Web Service" (wajib
-	// listen HTTP) — tidak ada tipe "Background Worker" gratis. cmd/worker
-	// murni proses background (consumer, ticker), jadi endpoint ini
-	// SEMATA-MATA syarat deployment, bukan kebutuhan bisnis — tidak
-	// menyentuh logic worker manapun di atas.
 	healthMux := http.NewServeMux()
 	healthMux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -104,10 +94,6 @@ func main() {
 
 	log.Printf("worker healthz endpoint running on port %s (env: %s)", port, cfg.Env)
 
-	// Jalankan 5 loop paralel (4 worker asli + 1 health endpoint). errCh
-	// nampung error PERTAMA yang muncul dari salah satu goroutine — begitu
-	// satu loop mati karena error (bukan context.Canceled), proses utama
-	// ikut exit.
 	errCh := make(chan error, 5)
 	go func() { errCh <- consumer.Run(ctx) }()
 	go func() { errCh <- alertNotifierWorker.Run(ctx) }()
