@@ -1,0 +1,20 @@
+name: Keep Render Services Warm
+
+on:
+  schedule:
+    # Tiap 10 menit — di bawah threshold spin-down Render (15 menit)
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping cmd/api
+        run: curl -fsS https://sentinelix-api.onrender.com/healthz
+
+      - name: Ping cmd/worker
+        run: curl -fsS https://sentinelix-worker.onrender.com/healthz
+
+      - name: Ping status-api
+        run: curl -fsS https://sentinelix-status-api.onrender.com/healthz

@@ -1,4 +1,3 @@
-# .github/workflows/migrate.yml
 name: Database Migration
 
 on:
