@@ -2,12 +2,15 @@ package testutil
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -27,7 +30,7 @@ func NewPostgresPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	ctx := context.Background()
 
-	container, err := tcpostgres.Run(ctx, 
+	container, err := tcpostgres.Run(ctx,
 		"postgres:16-alpine",
 		tcpostgres.WithDatabase("sentinelix_test"),
 		tcpostgres.WithUsername("sentinelix"),
@@ -59,22 +62,45 @@ func NewPostgresPool(t *testing.T) *pgxpool.Pool {
 		t.Fatalf("failed to create pgxpool: %v", err)
 	}
 	t.Cleanup(pool.Close)
-	
+
 	return pool
 }
 
-// runMigrations jalankan SEMUA migration dari folder migrations/ ke
-// container yang baru dibuat — test dapat skema yang sinkron sama
-// migration terbaru, bukan skema hardcoded/asumsi yang bisa basi.
+// migrationsDir — path OS-native (BUKAN string URL), dihitung dari lokasi
+// FILE INI SENDIRI (runtime.Caller), bukan lokasi package yang MEMANGGIL
+// helper ini. Ini yang bikin resolusi path BENAR untuk caller di
+// kedalaman manapun (internal/repository/postgres/, internal/worker/,
+// dst) — beda dari versi lama yang hardcode "../../../" dan asumsi semua
+// caller persis 3 level dari root.
+func migrationsDir() string {
+	_, thisFile, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(thisFile), "..", "..", "migrations")
+}
+
+// runMigrations — SENGAJA pakai source/iofs + os.DirFS(), BUKAN
+// source/file dengan string URL ("file://...."). Alasan: merepresentasikan
+// path lokal sebagai string URI ("file:///D:/...") terbukti rapuh di
+// Windows lewat 2 percobaan berturut-turut (drive letter "D:" ketuker
+// parser jadi host:port di percobaan pertama, lalu "The filename,
+// directory name, or volume label syntax is incorrect" di percobaan
+// kedua walau formatnya sudah sesuai dokumentasi resmi golang-migrate).
+//
+// os.DirFS() + iofs.New() SAMA SEKALI TIDAK PERNAH melewati path lokal
+// sebagai string URL — Go runtime yang menerjemahkan path OS-native ke
+// fs.FS secara internal (fs.FS SELALU pakai forward-slash secara
+// spesifikasi, apapun OS-nya), jadi tidak ada celah salah-parsing drive
+// letter sama sekali. Ini juga cara yang didokumentasikan resmi
+// golang-migrate sejak v4.15.0 (project ini pakai v4.19.1).
 func runMigrations(t *testing.T, connStr string) {
 	t.Helper()
 
-	// Path relatif dari package test manapun yang manggil helper ini
-	// (internal/repository/postgres/ ATAU internal/repository/redis/)
-	// ke folder migrations/ di root repo — SAMA-SAMA 3 level naik.
-	migrationsPath := "file://../../../migrations"
+	fsys := os.DirFS(migrationsDir())
+	sourceDriver, err := iofs.New(fsys, ".")
+	if err != nil {
+		t.Fatalf("failed to init iofs source: %v", err)
+	}
 
-	m, err := migrate.New(migrationsPath, connStr)
+	m, err := migrate.NewWithSourceInstance("iofs", sourceDriver, connStr)
 	if err != nil {
 		t.Fatalf("failed to init migrate: %v", err)
 	}

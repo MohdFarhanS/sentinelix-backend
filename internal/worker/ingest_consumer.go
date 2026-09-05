@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -15,8 +16,13 @@ import (
 
 const (
 	ingestStreamKey = "queue:ingest"
-	consumerGroup   = "ingest-workers"
-	consumerName    = "worker-1"
+	// dlqStreamKey — Redis Stream terpisah buat event yang gagal diproses
+	// setelah melebihi maxDeliveryCount. Dipilih Stream (bukan List/Set)
+	// biar konsisten tooling-nya dengan queue:ingest (bisa di-XRange,
+	// di-inspect pakai redis-cli/RedisInsight yang sama).
+	dlqStreamKey  = "queue:ingest:dlq"
+	consumerGroup = "ingest-workers"
+	consumerName  = "worker-1"
 )
 
 type IngestConsumer struct {
@@ -25,6 +31,14 @@ type IngestConsumer struct {
 	groupIssue    *usecase.GroupIssueUsecase
 	broadcaster   *redisrepo.Broadcaster
 	evaluateAlert *usecase.EvaluateAlertUsecase
+
+	// maxDeliveryCount, reclaimMinIdle, reclaimInterval — parameter NFR-3
+	// (retry + DLQ), SENGAJA jadi field (bukan konstanta package) supaya
+	// unit test bisa pakai nilai kecil (reclaim cepat, dalam hitungan
+	// milidetik) tanpa perlu menunggu nilai produksi yang sengaja besar.
+	maxDeliveryCount int64
+	reclaimMinIdle   time.Duration
+	reclaimInterval  time.Duration
 }
 
 func NewIngestConsumer(
@@ -33,10 +47,17 @@ func NewIngestConsumer(
 	groupIssue *usecase.GroupIssueUsecase,
 	broadcaster *redisrepo.Broadcaster,
 	evaluateAlert *usecase.EvaluateAlertUsecase,
+	maxDeliveryCount int64,
+	reclaimMinIdle time.Duration,
+	reclaimInterval time.Duration,
 ) *IngestConsumer {
 	return &IngestConsumer{
 		client: client, logger: logger, groupIssue: groupIssue,
-		broadcaster: broadcaster, evaluateAlert: evaluateAlert}
+		broadcaster: broadcaster, evaluateAlert: evaluateAlert,
+		maxDeliveryCount: maxDeliveryCount,
+		reclaimMinIdle:   reclaimMinIdle,
+		reclaimInterval:  reclaimInterval,
+	}
 }
 
 func (c *IngestConsumer) ensureGroup(ctx context.Context) error {
@@ -84,31 +105,125 @@ func (c *IngestConsumer) Run(ctx context.Context) error {
 	}
 }
 
-func (c *IngestConsumer) processMessage(ctx context.Context, msg redis.XMessage) {
-	// NOTE: pola ack-selalu (ack di akhir apapun hasilnya) dipertahankan
-	// sama seperti versi Sprint 2 — retry/DLQ (NFR-3) belum di-scope di
-	// Sprint 3 ini, akan ditangani terpisah nanti.
-	defer func() {
-		if err := c.client.XAck(ctx, ingestStreamKey, consumerGroup, msg.ID).Err(); err != nil {
-			c.logger.Error().Err(err).Str("message_id", msg.ID).Msg("failed to ack message")
-		}
-	}()
+// RunReclaim — loop terpisah (goroutine sendiri, dijalankan bareng Run()
+// di cmd/worker/main.go) yang secara berkala scan pesan PENDING (sudah
+// di-XReadGroup tapi belum di-ack) yang idle lebih lama dari
+// reclaimMinIdle — tanda percobaan sebelumnya gagal (bukan lagi diproses
+// aktif, karena kalau masih aktif idle-nya pasti pendek). Redis Streams
+// sendiri yang nge-track delivery count per pesan lewat XPendingExt —
+// tidak perlu counter manual di kode kita (NFR-3: retry + DLQ).
+func (c *IngestConsumer) RunReclaim(ctx context.Context) error {
+	ticker := time.NewTicker(c.reclaimInterval)
+	defer ticker.Stop()
 
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			c.reclaimOnce(ctx)
+		}
+	}
+}
+
+func (c *IngestConsumer) reclaimOnce(ctx context.Context) {
+	pending, err := c.client.XPendingExt(ctx, &redis.XPendingExtArgs{
+		Stream: ingestStreamKey,
+		Group:  consumerGroup,
+		Idle:   c.reclaimMinIdle,
+		Start:  "-",
+		End:    "+",
+		Count:  50,
+	}).Result()
+	if err != nil {
+		c.logger.Error().Err(err).Msg("failed to read pending messages for reclaim")
+		return
+	}
+
+	for _, p := range pending {
+		claimed, err := c.client.XClaim(ctx, &redis.XClaimArgs{
+			Stream:   ingestStreamKey,
+			Group:    consumerGroup,
+			Consumer: consumerName,
+			MinIdle:  c.reclaimMinIdle,
+			Messages: []string{p.ID},
+		}).Result()
+		if err != nil || len(claimed) == 0 {
+			if err != nil {
+				c.logger.Error().Err(err).Str("message_id", p.ID).Msg("failed to claim pending message")
+			}
+			continue
+		}
+		msg := claimed[0]
+
+		if p.RetryCount > c.maxDeliveryCount {
+			c.logger.Error().Str("message_id", p.ID).Int64("delivery_count", p.RetryCount).
+				Msg("max retries exceeded, moving to DLQ")
+			c.moveToDLQ(ctx, msg, fmt.Sprintf("exceeded max retries (%d)", c.maxDeliveryCount))
+			continue
+		}
+
+		c.logger.Info().Str("message_id", msg.ID).Int64("attempt", p.RetryCount+1).
+			Msg("retrying previously failed message")
+		c.processMessage(ctx, msg)
+	}
+}
+
+// moveToDLQ — pindahkan pesan (payload asli + alasan gagal) ke stream
+// terpisah, lalu ack dari stream utama. Best-effort di dua langkahnya:
+// kegagalan XAdd/XAck di sini di-log, TIDAK di-retry lagi (kalau sampai
+// gagal di titik ini, kemungkinan besar masalahnya di Redis itu sendiri,
+// bukan di pesan spesifik ini).
+func (c *IngestConsumer) moveToDLQ(ctx context.Context, msg redis.XMessage, reason string) {
+	dlqPayload := map[string]interface{}{
+		"original_id": msg.ID,
+		"data":        msg.Values["data"],
+		"reason":      reason,
+		"failed_at":   time.Now().UTC().Format(time.RFC3339),
+	}
+	raw, _ := json.Marshal(dlqPayload)
+
+	if err := c.client.XAdd(ctx, &redis.XAddArgs{
+		Stream: dlqStreamKey,
+		Values: map[string]interface{}{"data": string(raw)},
+	}).Err(); err != nil {
+		c.logger.Error().Err(err).Str("message_id", msg.ID).Msg("failed to move message to DLQ")
+	}
+
+	if err := c.client.XAck(ctx, ingestStreamKey, consumerGroup, msg.ID).Err(); err != nil {
+		c.logger.Error().Err(err).Str("message_id", msg.ID).Msg("failed to ack message after moving to DLQ")
+	}
+}
+
+func (c *IngestConsumer) processMessage(ctx context.Context, msg redis.XMessage) {
 	raw, ok := msg.Values["data"].(string)
 	if !ok {
-		c.logger.Error().Str("message_id", msg.ID).Msg("data field missing or not a string")
+		// Pesan cacat secara struktural (bukan masalah infra/transient) —
+		// retry TIDAK akan pernah berhasil, langsung DLQ tanpa nunggu
+		// reclaim loop.
+		c.logger.Error().Str("message_id", msg.ID).Msg("data field missing or not a string, moving to DLQ")
+		c.moveToDLQ(ctx, msg, "data field missing or not a string")
 		return
 	}
 
 	var event domain.Event
 	if err := json.Unmarshal([]byte(raw), &event); err != nil {
-		c.logger.Error().Err(err).Str("message_id", msg.ID).Msg("failed to unmarshal event")
+		// Sama alasannya seperti di atas — JSON invalid tidak akan
+		// pernah valid cuma dengan dicoba ulang.
+		c.logger.Error().Err(err).Str("message_id", msg.ID).Msg("failed to unmarshal event, moving to DLQ")
+		c.moveToDLQ(ctx, msg, "unmarshal error: "+err.Error())
 		return
 	}
 
 	issue, wasCreated, err := c.groupIssue.Execute(ctx, &event)
 	if err != nil {
-		c.logger.Error().Err(err).Str("message_id", msg.ID).Msg("failed to group issue")
+		// Kandidat kuat kegagalan TRANSIENT (Postgres/Neon tidak bisa
+		// diakses, dsb) — SENGAJA TIDAK di-ack di sini. Pesan tetap
+		// "pending" di consumer group, ditemukan lagi oleh reclaimOnce
+		// setelah idle > reclaimMinIdle, di-retry sampai maxDeliveryCount
+		// kali sebelum akhirnya masuk DLQ.
+		c.logger.Error().Err(err).Str("message_id", msg.ID).
+			Msg("failed to group issue, leaving pending for retry")
 		return
 	}
 
@@ -135,6 +250,14 @@ func (c *IngestConsumer) processMessage(ctx context.Context, msg redis.XMessage)
 		Bool("was_created", wasCreated).
 		Int("count", issue.Count).
 		Msg("event grouped successfully")
+
+	// Ack CUMA di titik SUKSES ini -- groupIssue.Execute berhasil berarti
+	// data sudah aman tersimpan di Postgres. Kegagalan broadcast/alert di
+	// atas TIDAK membatalkan ack ini (concern terpisah, sudah di-log,
+	// issue-nya sendiri tetap tersimpan benar).
+	if err := c.client.XAck(ctx, ingestStreamKey, consumerGroup, msg.ID).Err(); err != nil {
+		c.logger.Error().Err(err).Str("message_id", msg.ID).Msg("failed to ack message")
+	}
 }
 
 type issueCreatedPayload struct {

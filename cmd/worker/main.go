@@ -62,7 +62,21 @@ func main() {
 	evaluateAlertUsecase := usecase.NewEvaluateAlertUsecase(alertRuleRepo, alertLogRepo, issueRepo, eventRepo, multiNotifier)
 	monitorCheckerUsecase := usecase.NewMonitorCheckerUsecase(monitorRepo, monitorCheckRepo, multiNotifier, broadcaster)
 
-	consumer := worker.NewIngestConsumer(redisClient, logger, groupIssueUsecase, broadcaster, evaluateAlertUsecase)
+	// Parameter retry/DLQ (NFR-3, Sprint 10): pesan yang gagal diproses
+	// dicoba ulang maksimal 3x (delivery count native Redis Streams),
+	// dianggap "stuck"/perlu diklaim ulang setelah idle 30 detik tanpa
+	// progress, dicek tiap 30 detik oleh reclaim loop. Angka-angka ini
+	// bukan konstanta package (lihat ingest_consumer.go) supaya test bisa
+	// pakai nilai jauh lebih kecil tanpa nunggu real 30 detik.
+	const (
+		maxDeliveryCount = 3
+		reclaimMinIdle   = 30 * time.Second
+		reclaimInterval  = 30 * time.Second
+	)
+	consumer := worker.NewIngestConsumer(
+		redisClient, logger, groupIssueUsecase, broadcaster, evaluateAlertUsecase,
+		maxDeliveryCount, reclaimMinIdle, reclaimInterval,
+	)
 	// Interval dinaikkan dari 1 menit -> 10 menit (Sprint 10, audit compute
 	// Neon). Ini CUMA mempengaruhi alert condition_type="threshold" (deteksi
 	// lonjakan sustained dalam window waktu) — alert condition_type=
@@ -94,8 +108,9 @@ func main() {
 
 	log.Printf("worker healthz endpoint running on port %s (env: %s)", port, cfg.Env)
 
-	errCh := make(chan error, 5)
+	errCh := make(chan error, 6)
 	go func() { errCh <- consumer.Run(ctx) }()
+	go func() { errCh <- consumer.RunReclaim(ctx) }()
 	go func() { errCh <- alertNotifierWorker.Run(ctx) }()
 	go func() { errCh <- monitorSupervisor.Run(ctx) }()
 	go func() { errCh <- worker.RunMonitorSync(ctx, monitorSupervisor, broadcaster, logger) }()
